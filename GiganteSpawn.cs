@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Engine;
 using Game;
 using GameEntitySystem;
@@ -10,9 +11,53 @@ namespace GiganteCode
     // Esta clase REEMPLAZA al GiganteCode.dll original (ya registra los tres).
     public class GiganteSpawnLoader : ModLoader
     {
+        private static readonly System.Random s_random = new System.Random();
+
         public override void __ModInitialize()
         {
             ModsManager.RegisterHook("InitializeCreatureTypes", this);
+            ModsManager.RegisterHook("OnMinerHit", this);
+        }
+
+        // Aniquilador de gigantes: poder 20 contra los gigantes, el normal (4) contra lo demas.
+        public override void OnMinerHit(
+            ComponentMiner miner, ComponentBody componentBody, Vector3 hitPoint, Vector3 hitDirection,
+            ref float attackPower, ref float playerProbability, ref float creatureProbability,
+            out bool Hitted)
+        {
+            Hitted = false;
+
+            // Nauseas: el gigante canibal y el muerto tienen 25% de causar nauseas al jugador.
+            // Solo se aplica si el golpe realmente le quita vida: si la armadura lo absorbe, no pasa nada.
+            string atacante = miner.Entity.ValuesDictionary.DatabaseObject.Name;
+            if (atacante == "GigantePequenoCanibal" || atacante == "GigantePequenoMuerto")
+            {
+                Entity objetivo = componentBody.Entity;
+                ComponentHealth salud = objetivo.FindComponent<ComponentHealth>();
+                ComponentSickness nauseas = objetivo.FindComponent<ComponentSickness>();
+                if (salud != null && nauseas != null
+                    && objetivo.FindComponent<ComponentPlayer>() != null
+                    && s_random.NextDouble() < 0.25)
+                {
+                    float saludAntes = salud.Health;
+                    Task.Delay(150).ContinueWith(tarea => Dispatcher.Dispatch(() =>
+                    {
+                        if (salud.Health < saludAntes)
+                        {
+                            nauseas.StartSickness();
+                        }
+                    }));
+                }
+            }
+
+            if (Terrain.ExtractContents(miner.ActiveBlockValue) == AniquiladorGigantesBlock.Index)
+            {
+                string name = componentBody.Entity.ValuesDictionary.DatabaseObject.Name;
+                if (name.StartsWith("GigantePequeno"))
+                {
+                    attackPower = AniquiladorGigantesBlock.PoderContraGigantes;
+                }
+            }
         }
 
         public override void InitializeCreatureTypes(
