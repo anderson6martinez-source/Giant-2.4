@@ -1,0 +1,35 @@
+name: Compilar mod 2.4
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  compilar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Comprobar DLLs del juego
+        run: |
+          for f in Survivalcraft24.dll Engine24.dll EntitySystem24.dll; do
+            if [ ! -f "$f" ]; then echo "::error::Falta $f"; exit 1; fi
+          done
+
+      - name: Compilar
+        run: dotnet build Mod.csproj -c Release -o out
+
+      - name: Empaquetar .scmod
+        run: python3 empaquetar.py base24.scmod out/GiganteCode.dll GigantePequeno_2.4_compilado.scmod
+
+      - name: Subir resultado
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-24
+          path: |
+            out/GiganteCode.dll
+            GigantePequeno_2.4_compilado.scmod
