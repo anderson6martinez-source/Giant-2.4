@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>GiganteCode</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GameVer>24</GameVer>
+  </PropertyGroup>
+  <ItemGroup>
+    <GameDll Include="*$(GameVer).dll" />
+    <Reference Include="@(GameDll)">
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
