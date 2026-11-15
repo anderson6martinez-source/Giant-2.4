@@ -1,5 +1,4 @@
 using Engine;
-using Engine.Content;
 using Engine.Graphics;
 using Game;
 
