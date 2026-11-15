@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>GiganteCode</AssemblyName>
+    <RootNamespace>GiganteCode</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <!-- Cambia estas rutas a las DLL de tu Survivalcraft 2.4 (carpeta del juego) -->
+  <ItemGroup>
+    <Reference Include="Survivalcraft">
+      <HintPath>RUTA\Survivalcraft.dll</HintPath>
+    </Reference>
+    <Reference Include="Engine">
+      <HintPath>RUTA\Engine.dll</HintPath>
+    </Reference>
+    <Reference Include="EntitySystem">
+      <HintPath>RUTA\EntitySystem.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
