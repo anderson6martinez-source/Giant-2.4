@@ -38,6 +38,18 @@ namespace GiganteCode
         private const float IndVidaNoche = 25f, IndDanoNoche = 2f;
         private const float IndKmhDia = 9f, IndKmhNoche = 14f;
 
+        // ---- Instinto de manada ----
+        // Si atacan a uno, los de su grupo que esten cerca atacan al agresor:
+        //   grupo "esqueleto": los esqueletos entre si
+        //   grupo "indigena":  zombis indigenas + gigante muerto (y mutante) se defienden mutuamente
+        private const float RadioManada = 25f;        // bloques a la redonda que oyen el grito
+        private const float RangoDefensa = 40f;       // hasta donde persiguen al agresor
+        private const float TiempoDefensa = 40f;      // segundos maximos de persecucion
+        // Los indigenas salen a cazar a todos los gigantes menos al gigante muerto / mutante
+        private const float RadioCazaGigantes = 25f;
+        private const double PausaCaza = 1.0;         // cada cuanto buscan gigantes (segundos)
+        private const string PrefijoGigantes = "Gigante";
+
         private const float LuzNoche = 0.3f;                     // SkyLightIntensity por debajo de esto = noche
 
         private class Base
@@ -54,6 +66,8 @@ namespace GiganteCode
         private SubsystemTime tiempo;
         private double proximaRevision;
         private double proximaLimpieza;
+        private double proximaCaza;
+        private readonly HashSet<Entity> suscritos = new HashSet<Entity>();
 
         // valores originales (los de la plantilla) de cada criatura la primera vez que se la ve
         private readonly Dictionary<Entity, Base> bases = new Dictionary<Entity, Base>();
@@ -138,6 +152,8 @@ namespace GiganteCode
             tiempo = project.FindSubsystem<SubsystemTime>(true);
             proximaRevision = 0;
             proximaLimpieza = 0;
+            proximaCaza = 0;
+            suscritos.Clear();
             bases.Clear();
             texturasOjos.Clear();
         }
@@ -145,6 +161,7 @@ namespace GiganteCode
         public override void OnProjectDisposed()
         {
             proyecto = null; creaturas = null; cielo = null; tiempo = null;
+            suscritos.Clear();
             bases.Clear();
             texturasOjos.Clear();
         }
@@ -218,6 +235,8 @@ namespace GiganteCode
                 }
             }
 
+            RevisarManadas();
+
             // limpieza de criaturas que ya no existen (cada ~10 s)
             if (tiempo.GameTime >= proximaLimpieza)
             {
@@ -230,6 +249,101 @@ namespace GiganteCode
                     if (!vivas.Contains(e)) viejas.Add(e);
                 }
                 foreach (Entity e in viejas) bases.Remove(e);
+                suscritos.IntersectWith(vivas);
+            }
+        }
+
+        // ---------- instinto de manada ----------
+        private static string NombrePlantilla(ComponentCreature c)
+        {
+            return c.Entity.ValuesDictionary.DatabaseObject.Name;
+        }
+
+        private static bool EsZombiGigante(string plantilla)
+        {
+            return plantilla == "GigantePequenoMuerto" || plantilla == "GigantePequenoMutante";
+        }
+
+        // grupo al que pertenece una criatura (null = no tiene manada)
+        private static string Grupo(ComponentCreature c)
+        {
+            string plantilla = NombrePlantilla(c);
+            if (plantilla == PlantillaEsqueleto) return "esqueleto";
+            if (EsZombiGigante(plantilla) || EsIndigena(plantilla, c.DisplayName)) return "indigena";
+            return null;
+        }
+
+        private static bool EstaViva(ComponentCreature c)
+        {
+            return c != null && c.ComponentHealth != null && c.ComponentHealth.Health > 0f && c.ComponentBody != null;
+        }
+
+        private void RevisarManadas()
+        {
+            // 1) cada miembro de una manada avisa a los demas cuando lo atacan (se suscribe una sola vez)
+            foreach (ComponentCreature criatura in creaturas.Creatures)
+            {
+                if (suscritos.Contains(criatura.Entity)) continue;
+                if (Grupo(criatura) == null || criatura.ComponentHealth == null) continue;
+
+                suscritos.Add(criatura.Entity);
+                ComponentCreature victima = criatura;
+                criatura.ComponentHealth.Attacked += (ComponentCreature agresor) => AlSerAtacado(victima, agresor);
+            }
+
+            // 2) los indigenas buscan gigantes (todos menos el muerto y el mutante) y los atacan
+            if (tiempo.GameTime < proximaCaza) return;
+            proximaCaza = tiempo.GameTime + PausaCaza;
+
+            foreach (ComponentCreature indigena in creaturas.Creatures)
+            {
+                if (!EstaViva(indigena)) continue;
+                if (!EsIndigena(NombrePlantilla(indigena), indigena.DisplayName)) continue;
+
+                ComponentChaseBehavior persecucion = indigena.Entity.FindComponent<ComponentChaseBehavior>();
+                if (persecucion == null) continue;
+                if (persecucion.Target != null && EstaViva(persecucion.Target)) continue; // ya tiene objetivo
+
+                ComponentCreature masCercano = null;
+                float mejor = RadioCazaGigantes;
+                foreach (ComponentCreature otro in creaturas.Creatures)
+                {
+                    if (!EstaViva(otro)) continue;
+                    string plantilla = NombrePlantilla(otro);
+                    if (!plantilla.StartsWith(PrefijoGigantes) || EsZombiGigante(plantilla)) continue;
+
+                    float distancia = Vector3.Distance(indigena.ComponentBody.Position, otro.ComponentBody.Position);
+                    if (distancia < mejor)
+                    {
+                        mejor = distancia;
+                        masCercano = otro;
+                    }
+                }
+                if (masCercano != null)
+                {
+                    persecucion.Attack(masCercano, RangoDefensa, TiempoDefensa, false);
+                }
+            }
+        }
+
+        // alguien de la manada fue atacado: los de su grupo que esten cerca atacan al agresor
+        private void AlSerAtacado(ComponentCreature victima, ComponentCreature agresor)
+        {
+            if (creaturas == null || !EstaViva(agresor) || !EstaViva(victima)) return;
+
+            string grupo = Grupo(victima);
+            if (grupo == null || Grupo(agresor) == grupo) return; // fuego amigo: no se atacan entre ellos
+
+            foreach (ComponentCreature aliado in creaturas.Creatures)
+            {
+                if (aliado == victima || !EstaViva(aliado) || Grupo(aliado) != grupo) continue;
+                if (Vector3.Distance(victima.ComponentBody.Position, aliado.ComponentBody.Position) > RadioManada) continue;
+
+                ComponentChaseBehavior persecucion = aliado.Entity.FindComponent<ComponentChaseBehavior>();
+                if (persecucion == null) continue;
+                if (persecucion.Target != null && EstaViva(persecucion.Target)) continue; // ya esta peleando
+
+                persecucion.Attack(agresor, RangoDefensa, TiempoDefensa, true);
             }
         }
 
