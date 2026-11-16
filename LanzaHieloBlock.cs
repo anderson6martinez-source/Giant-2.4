@@ -9,7 +9,7 @@ namespace GiganteCode
     public class LanzaHieloBlock : SpearBlock
     {
         // Indice unico del bloque (distinto del de AlmaGiganteBlock). Si choca con otro mod, cambialo.
-        public new const int Index = 701;
+        public new const int Index = 199;
 
         private BlockMesh m_mallaLanza;
         private static Texture2D m_textura;
