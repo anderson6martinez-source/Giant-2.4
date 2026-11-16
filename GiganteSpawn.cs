@@ -13,6 +13,18 @@ namespace GiganteCode
     {
         private static readonly System.Random s_random = new System.Random();
 
+        // Peso de aparicion del gigante muerto: 0.45 de dia y 0.75 de noche.
+        // La noche empieza en 0.80 del ciclo y termina cuando empieza a amanecer (0.20).
+        private const float PesoMuertoDia = 0.45f;
+        private const float PesoMuertoNoche = 0.75f;
+        private const float NocheInicio = 0.80f;
+        private const float AmanecerInicio = 0.20f;
+
+        private static bool EsDeNoche(float horaDelDia)
+        {
+            return horaDelDia >= NocheInicio || horaDelDia < AmanecerInicio;
+        }
+
         public override void __ModInitialize()
         {
             ModsManager.RegisterHook("InitializeCreatureTypes", this);
@@ -66,15 +78,19 @@ namespace GiganteCode
         {
             SubsystemTerrain subsystemTerrain =
                 subsystemCreatureSpawn.Project.FindSubsystem<SubsystemTerrain>(true);
+            SubsystemTimeOfDay subsystemTimeOfDay =
+                subsystemCreatureSpawn.Project.FindSubsystem<SubsystemTimeOfDay>(true);
             System.Random random = new System.Random();
 
             // nombre de plantilla, peso de spawn, min y max de criaturas por grupo
             AddGiant(subsystemCreatureSpawn, subsystemTerrain, creatureTypes, random,
-                "GigantePequeno", 0.6f, 1, 1);
+                "GigantePequeno", () => 0.6f, 1, 1);
             AddGiant(subsystemCreatureSpawn, subsystemTerrain, creatureTypes, random,
-                "GigantePequenoCanibal", 0.4f, 1, 1);
+                "GigantePequenoCanibal", () => 0.4f, 1, 1);
             AddGiant(subsystemCreatureSpawn, subsystemTerrain, creatureTypes, random,
-                "GigantePequenoMuerto", 0.5f, 1, 2);
+                "GigantePequenoMuerto",
+                () => EsDeNoche(subsystemTimeOfDay.TimeOfDay) ? PesoMuertoNoche : PesoMuertoDia,
+                1, 2);
         }
 
         private static void AddGiant(
@@ -82,7 +98,7 @@ namespace GiganteCode
             SubsystemTerrain subsystemTerrain,
             List<SubsystemCreatureSpawn.CreatureType> creatureTypes,
             System.Random random,
-            string templateName, float weight, int minCount, int maxCount)
+            string templateName, System.Func<float> weight, int minCount, int maxCount)
         {
             SubsystemCreatureSpawn.CreatureType type =
                 new SubsystemCreatureSpawn.CreatureType(
@@ -110,7 +126,7 @@ namespace GiganteCode
                 {
                     return 0f;
                 }
-                return weight;
+                return weight();
             };
 
             type.SpawnFunction = (SubsystemCreatureSpawn.CreatureType creatureType, Point3 point) =>
