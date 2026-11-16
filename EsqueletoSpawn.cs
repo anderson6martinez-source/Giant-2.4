@@ -39,13 +39,16 @@ namespace GiganteCode
         private const float IndKmhDia = 9f, IndKmhNoche = 14f;
 
         // ---- Instinto de manada ----
-        // Si atacan a uno, los de su grupo que esten cerca atacan al agresor:
+        // Si atacan a uno, los de su grupo que esten cerca atacan al agresor.
         //   grupo "esqueleto": los esqueletos entre si
         //   grupo "indigena":  zombis indigenas + gigante muerto (y mutante) se defienden mutuamente
+        //   los otros gigantes (pequeno, canibal, hielo, volador): sin manada
         private const float RadioManada = 25f;        // bloques a la redonda que oyen el grito
         private const float RangoDefensa = 40f;       // hasta donde persiguen al agresor
         private const float TiempoDefensa = 40f;      // segundos maximos de persecucion
         // Los indigenas salen a cazar a todos los gigantes menos al gigante muerto / mutante
+        private const bool IndigenasCazanGigantes = true;  // los indigenas cazan a los otros gigantes (no muerto/mutante)
+        private const bool OtrosGigantesSeDefienden = false; // los otros gigantes NO se ayudan ni entre su propia especie
         private const float RadioCazaGigantes = 25f;
         private const double PausaCaza = 1.0;         // cada cuanto buscan gigantes (segundos)
         private const string PrefijoGigantes = "Gigante";
@@ -268,8 +271,13 @@ namespace GiganteCode
         private static string Grupo(ComponentCreature c)
         {
             string plantilla = NombrePlantilla(c);
+            // esqueletos: se defienden solo entre ellos
             if (plantilla == PlantillaEsqueleto) return "esqueleto";
+            // gigantes zombis (muerto y mutante) + zombis indigenas: se defienden mutuamente
             if (EsZombiGigante(plantilla) || EsIndigena(plantilla, c.DisplayName)) return "indigena";
+            // los otros gigantes (pequeno, canibal, hielo, volador): no se defienden ni entre ellos
+            // (cambia OtrosGigantesSeDefienden a true si algun dia quieres que se ayuden)
+            if (OtrosGigantesSeDefienden && plantilla.StartsWith(PrefijoGigantes)) return "gigante";
             return null;
         }
 
@@ -288,10 +296,13 @@ namespace GiganteCode
 
                 suscritos.Add(criatura.Entity);
                 ComponentCreature victima = criatura;
-                criatura.ComponentHealth.Attacked += (ComponentCreature agresor) => AlSerAtacado(victima, agresor);
+                // OJO: en 2.4 ComponentHealth.Attacked ya no se dispara nunca. El evento real (el mismo que usan
+                // ChaseBehavior y HerdBehavior del juego) es ComponentHealth.Injured, que trae el Injury con el agresor.
+                criatura.ComponentHealth.Injured += (Injury lesion) => AlSerAtacado(victima, lesion.Attacker);
             }
 
             // 2) los indigenas buscan gigantes (todos menos el muerto y el mutante) y los atacan
+            if (!IndigenasCazanGigantes) return;
             if (tiempo.GameTime < proximaCaza) return;
             proximaCaza = tiempo.GameTime + PausaCaza;
 
