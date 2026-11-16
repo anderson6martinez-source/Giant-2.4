@@ -14,7 +14,10 @@ namespace GiganteCode
         private BlockMesh m_mallaLanza;
         private static Texture2D m_textura;
 
-        public LanzaHieloBlock()
+        // SpearBlock exige (handleTextureSlot, headTextureSlot): los huecos de textura del atlas
+        // para el mango y la punta. Aqui no se usan para dibujar (DrawBlock usa su propia textura
+        // de hielo), asi que 0, 0 es suficiente.
+        public LanzaHieloBlock() : base(0, 0)
         {
             // Nombre con el que se usa en las recetas (.cr)
             CraftingId = "lanzahielo";
