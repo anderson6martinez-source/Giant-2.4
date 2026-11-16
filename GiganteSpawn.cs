@@ -7,8 +7,8 @@ using GameEntitySystem;
 
 namespace GiganteCode
 {
-    // Registra el spawn natural de los tres gigantes (GigantePequeno, GigantePequenoCanibal
-    // y GigantePequenoMuerto), las nauseas del canibal y el muerto, y el lanzamiento de lanzas.
+    // Registra el spawn natural de los gigantes (pequeno, canibal, muerto, de hielo y volador),
+    // las nauseas, el resfriado, el lanzamiento de lanzas, la mutacion en luna llena y el vuelo del gigante volador.
     public class GiganteSpawnLoader : ModLoader
     {
         private static readonly System.Random s_random = new System.Random();
@@ -42,6 +42,10 @@ namespace GiganteCode
         {
             ModsManager.RegisterHook("InitializeCreatureTypes", this);
             ModsManager.RegisterHook("OnMinerHit", this);
+            // Gigante volador
+            ModsManager.RegisterHook("OnProjectLoaded", this);
+            ModsManager.RegisterHook("OnProjectDisposed", this);
+            ModsManager.RegisterHook("SubsystemUpdate", this);
         }
 
         // Nauseas: el gigante canibal y el muerto tienen 25% de causar nauseas al jugador.
@@ -116,6 +120,11 @@ namespace GiganteCode
             AddGiant(subsystemCreatureSpawn, subsystemTerrain, creatureTypes, random,
                 "GiganteHielo", 0.5f, 1, 1, true);
 
+            // Gigante volador: aparece de forma natural en cualquier bioma (sobre suelo solido).
+            // Nace en el suelo y enseguida sube a volar (ver SubsystemUpdate).
+            AddGiant(subsystemCreatureSpawn, subsystemTerrain, creatureTypes, random,
+                PlantillaVolador, PesoVolador, 1, 1);
+
             IniciarLanzas(subsystemCreatureSpawn.Project);
         }
 
@@ -167,6 +176,146 @@ namespace GiganteCode
             };
 
             creatureTypes.Add(type);
+        }
+
+        // ---- Gigante volador: sin gravedad, patrulla en el aire y pica para atacar ----
+        private const string NombreVolador = "Gigante volador";       // DisplayName del .xdb
+        private const string PlantillaVolador = "GiganteVolador";     // Name de la plantilla del .xdb
+        private const float PesoVolador = 0.45f;                      // peso de aparicion natural
+        private const float AlturaCrucero = 6f;           // bloques sobre el suelo cuando no hay objetivo
+        private const float VelocidadVertical = 3.5f;     // m/s maxima al subir o bajar
+        private const float VelocidadPatrulla = 1.4f;     // m/s sin objetivo
+        private const float VelocidadPersecucion = 2.78f; // 10 km/h
+        private const float DistanciaAtaque = 2.6f;       // bloques
+        private const float PausaAtaque = 1.3f;           // segundos entre golpes
+
+        private SubsystemCreatureSpawn creaturas;
+        private SubsystemTerrain terreno;
+        private SubsystemTime tiempo;
+        private readonly Dictionary<ComponentCreature, double> ultimoGolpe = new Dictionary<ComponentCreature, double>();
+        private readonly Dictionary<ComponentCreature, Vector2> rumbo = new Dictionary<ComponentCreature, Vector2>();
+        private readonly Dictionary<ComponentCreature, double> cambioRumbo = new Dictionary<ComponentCreature, double>();
+        private readonly System.Random azar = new System.Random();
+
+        public override void OnProjectLoaded(Project proyecto)
+        {
+            creaturas = proyecto.FindSubsystem<SubsystemCreatureSpawn>(true);
+            terreno = proyecto.FindSubsystem<SubsystemTerrain>(true);
+            tiempo = proyecto.FindSubsystem<SubsystemTime>(true);
+            ultimoGolpe.Clear(); rumbo.Clear(); cambioRumbo.Clear();
+        }
+
+        public override void OnProjectDisposed()
+        {
+            creaturas = null; terreno = null; tiempo = null;
+            ultimoGolpe.Clear(); rumbo.Clear(); cambioRumbo.Clear();
+        }
+
+        // ---------- vuelo ----------
+        public override void SubsystemUpdate(float dt)
+        {
+            if (creaturas == null || terreno == null || tiempo == null) return;
+            if (dt <= 0f) return;
+            if (dt > 0.1f) dt = 0.1f;
+
+            foreach (ComponentCreature gigante in new List<ComponentCreature>(creaturas.Creatures))
+            {
+                if (gigante.DisplayName != NombreVolador) continue;
+
+                ComponentBody cuerpo = gigante.ComponentBody;
+                ComponentHealth salud = gigante.ComponentHealth;
+                if (cuerpo == null || salud == null) continue;
+
+                if (salud.Health <= 0f)
+                {
+                    cuerpo.IsGravityEnabled = true; // al morir cae
+                    continue;
+                }
+                cuerpo.IsGravityEnabled = false;
+
+                Vector3 pos = cuerpo.Position;
+                int suelo = terreno.Terrain.GetTopHeight(Terrain.ToCell(pos.X), Terrain.ToCell(pos.Z)) + 1;
+
+                ComponentChaseBehavior persecucion = gigante.Entity.FindComponent<ComponentChaseBehavior>();
+                ComponentCreature objetivo = persecucion != null ? persecucion.Target : null;
+                bool hayObjetivo = objetivo != null && objetivo.ComponentBody != null
+                    && objetivo.ComponentHealth != null && objetivo.ComponentHealth.Health > 0f;
+
+                float alturaDeseada;
+                Vector2 direccion = Vector2.Zero;
+                float velocidad = 0f;
+
+                if (hayObjetivo)
+                {
+                    Vector3 posObj = objetivo.ComponentBody.Position;
+                    Vector2 hacia = new Vector2(posObj.X - pos.X, posObj.Z - pos.Z);
+                    float distHoriz = hacia.Length();
+                    if (distHoriz > 0.01f) direccion = hacia / distHoriz;
+
+                    if (distHoriz > 7f) alturaDeseada = System.Math.Max(suelo + 3f, posObj.Y + 3f);
+                    else alturaDeseada = posObj.Y + 0.6f; // pica hacia el objetivo
+                    velocidad = distHoriz > 1.2f ? VelocidadPersecucion : 0f;
+
+                    // golpe cuando esta cerca
+                    float distTotal = Vector3.Distance(pos + new Vector3(0f, cuerpo.BoxSize.Y * 0.5f, 0f),
+                        posObj + new Vector3(0f, objetivo.ComponentBody.BoxSize.Y * 0.5f, 0f));
+                    double ahora = tiempo.GameTime;
+                    double ultimo;
+                    if (!ultimoGolpe.TryGetValue(gigante, out ultimo)) ultimo = -100;
+                    if (distTotal <= DistanciaAtaque && ahora - ultimo >= PausaAtaque)
+                    {
+                        ComponentMiner minero = gigante.Entity.FindComponent<ComponentMiner>();
+                        if (minero != null)
+                        {
+                            Vector3 punto = posObj + new Vector3(0f, objetivo.ComponentBody.BoxSize.Y * 0.5f, 0f);
+                            Vector3 dir = Vector3.Normalize(punto - pos);
+                            minero.Hit(objetivo.ComponentBody, punto, dir);
+                            ultimoGolpe[gigante] = ahora;
+                        }
+                    }
+                }
+                else
+                {
+                    alturaDeseada = suelo + AlturaCrucero;
+                    double ahora = tiempo.GameTime;
+                    double siguiente;
+                    if (!cambioRumbo.TryGetValue(gigante, out siguiente) || ahora >= siguiente || !rumbo.ContainsKey(gigante))
+                    {
+                        double ang = azar.NextDouble() * System.Math.PI * 2.0;
+                        rumbo[gigante] = new Vector2((float)System.Math.Cos(ang), (float)System.Math.Sin(ang));
+                        cambioRumbo[gigante] = ahora + 4.0 + azar.NextDouble() * 6.0;
+                    }
+                    direccion = rumbo[gigante];
+                    velocidad = VelocidadPatrulla;
+                }
+
+                alturaDeseada = System.Math.Max(alturaDeseada, suelo + 0.3f);
+
+                // velocidad vertical suave hacia la altura deseada
+                float vy = (alturaDeseada - pos.Y) * 1.5f;
+                if (vy > VelocidadVertical) vy = VelocidadVertical;
+                if (vy < -VelocidadVertical) vy = -VelocidadVertical;
+
+                Vector3 v = cuerpo.Velocity;
+                float k = System.Math.Min(1f, 4f * dt);
+                v.Y += (vy - v.Y) * k;
+                v.X += (direccion.X * velocidad - v.X) * k;
+                v.Z += (direccion.Y * velocidad - v.Z) * k;
+                cuerpo.Velocity = v;
+
+                // girar hacia donde se mueve
+                if (velocidad > 0.2f)
+                {
+                    float objetivoYaw = (float)System.Math.Atan2(-direccion.X, -direccion.Y);
+                    Vector3 f = cuerpo.Matrix.Forward;
+                    float yawActual = (float)System.Math.Atan2(-f.X, -f.Z);
+                    float dif = objetivoYaw - yawActual;
+                    while (dif > System.Math.PI) dif -= (float)(2 * System.Math.PI);
+                    while (dif < -System.Math.PI) dif += (float)(2 * System.Math.PI);
+                    float nuevo = yawActual + dif * System.Math.Min(1f, 6f * dt);
+                    cuerpo.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, nuevo);
+                }
+            }
         }
 
         // ---- Lanzamiento de lanzas ----
