@@ -8,8 +8,8 @@ namespace GiganteCode
 {
     // Esqueletos (aparecen en manada de 4 a 8) y zombis indigenas: estadisticas de dia y de noche.
     //
-    // ESQUELETO   dia: 5 de vida, 0.5 de dano, 15 km/h     noche: 10 de vida, 1 de dano, 15 km/h, ojos rojos
-    // INDIGENA    dia: 13 de vida, 1.5 de dano, 9 km/h     noche: 25 de vida, 2 de dano, 14 km/h, ojos rojos
+    // ESQUELETO   dia: 10 de vida, 0.5 de dano, 15 km/h     noche: 20 de vida, 1 de dano, 15 km/h, ojos rojos
+    // INDIGENA    dia: 18 de vida, 1.5 de dano, 9 km/h     noche: 30 de vida, 2 de dano, 14 km/h, ojos rojos
     //
     // La distancia a la que ven al jugador (15 bloques el esqueleto, 25 el indigena) y los sonidos
     // estan en el .xdb (el esqueleto no tiene sfx; el indigena usa los del gigante muerto).
@@ -32,10 +32,10 @@ namespace GiganteCode
         private const int GrupoIndigenaMax = 2;
 
         // Vida (AttackResilience), dano (AttackPower) y velocidad (km/h) por tipo y momento del dia
-        private const float EsqVidaDia = 5f, EsqDanoDia = 0.5f, EsqKmhDia = 15f;
-        private const float EsqVidaNoche = 10f, EsqDanoNoche = 1f, EsqKmhNoche = 15f;
-        private const float IndVidaDia = 13f, IndDanoDia = 1.5f;
-        private const float IndVidaNoche = 25f, IndDanoNoche = 2f;
+        private const float EsqVidaDia = 10f, EsqDanoDia = 0.5f, EsqKmhDia = 15f;
+        private const float EsqVidaNoche = 20f, EsqDanoNoche = 1f, EsqKmhNoche = 15f;
+        private const float IndVidaDia = 18f, IndDanoDia = 1.5f;
+        private const float IndVidaNoche = 30f, IndDanoNoche = 2f;
         private const float IndKmhDia = 9f, IndKmhNoche = 14f;
 
         // ---- Instinto de manada ----
@@ -215,7 +215,7 @@ namespace GiganteCode
                 }
                 else
                 {
-                    // indigena: de dia 13 de vida y 1.5 de dano; de noche 25 y 2
+                    // indigena: de dia 18 de vida y 1.5 de dano; de noche 30 y 2
                     nuevaVida = noche ? IndVidaNoche : IndVidaDia;
                     nuevoDano = noche ? IndDanoNoche : IndDanoDia;
                     nuevaVelocidad = (noche ? IndKmhNoche : IndKmhDia) * KmhAMs;
