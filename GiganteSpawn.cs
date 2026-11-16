@@ -34,6 +34,7 @@ namespace GiganteCode
         private static readonly HashSet<Entity> s_botinEntregado = new HashSet<Entity>();
 
         private static int s_generacion;
+        private const int TemperaturaMaxHielo = 4; // el gigante de hielo solo aparece si la temperatura del bioma es <= 4
         // Gigantes que ya lanzaron su unica lanza (no vuelven a tener hasta recargar el mundo)
         private static readonly HashSet<Entity> s_sinLanza = new HashSet<Entity>();
 
@@ -53,6 +54,28 @@ namespace GiganteCode
             Hitted = false;
 
             string atacante = miner.Entity.ValuesDictionary.DatabaseObject.Name;
+
+            // Gigante de hielo: 20% de causar resfriado (solo si el golpe quita vida)
+            if (atacante == "GiganteHielo")
+            {
+                Entity victima = componentBody.Entity;
+                ComponentHealth saludVictima = victima.FindComponent<ComponentHealth>();
+                ComponentFlu resfriado = victima.FindComponent<ComponentFlu>();
+                if (saludVictima != null && resfriado != null
+                    && victima.FindComponent<ComponentPlayer>() != null
+                    && s_random.NextDouble() < 0.20)
+                {
+                    float vidaAntes = saludVictima.Health;
+                    Task.Delay(150).ContinueWith(tarea => Dispatcher.Dispatch(() =>
+                    {
+                        if (saludVictima.Health < vidaAntes)
+                        {
+                            resfriado.StartFlu();
+                        }
+                    }));
+                }
+            }
+
             if (atacante == "GigantePequenoCanibal" || atacante == "GigantePequenoMuerto")
             {
                 Entity objetivo = componentBody.Entity;
@@ -89,6 +112,9 @@ namespace GiganteCode
                 "GigantePequenoCanibal", 0.4f, 1, 1);
             AddGiant(subsystemCreatureSpawn, subsystemTerrain, creatureTypes, random,
                 "GigantePequenoMuerto", 0.5f, 1, 2);
+            // Gigante de hielo: solo aparece en biomas nevados y muy frios
+            AddGiant(subsystemCreatureSpawn, subsystemTerrain, creatureTypes, random,
+                "GiganteHielo", 0.5f, 1, 1, true);
 
             IniciarLanzas(subsystemCreatureSpawn.Project);
         }
@@ -98,7 +124,7 @@ namespace GiganteCode
             SubsystemTerrain subsystemTerrain,
             List<SubsystemCreatureSpawn.CreatureType> creatureTypes,
             System.Random random,
-            string templateName, float weight, int minCount, int maxCount)
+            string templateName, float weight, int minCount, int maxCount, bool soloFrio = false)
         {
             SubsystemCreatureSpawn.CreatureType type =
                 new SubsystemCreatureSpawn.CreatureType(
@@ -123,6 +149,11 @@ namespace GiganteCode
                     return 0f;
                 }
                 if (BlocksManager.Blocks[here].IsCollidable || BlocksManager.Blocks[above].IsCollidable)
+                {
+                    return 0f;
+                }
+                // Biomas nevados y muy frios: temperatura del bioma 0-4 (de 0 a 15)
+                if (soloFrio && subsystemTerrain.Terrain.GetTemperature(point.X, point.Z) > TemperaturaMaxHielo)
                 {
                     return 0f;
                 }
@@ -244,7 +275,7 @@ namespace GiganteCode
                 }
 
                 // Solo el gigante normal y el canibal tienen lanza; el muerto la perdio
-                if (nombre != "GigantePequeno" && nombre != "GigantePequenoCanibal")
+                if (nombre != "GigantePequeno" && nombre != "GigantePequenoCanibal" && nombre != "GiganteHielo")
                 {
                     continue;
                 }
@@ -367,27 +398,23 @@ namespace GiganteCode
             }));
         }
 
-        // ---- Botin del gigante muerto (se suelta por codigo para poder variar segun la mutacion) ----
-        // Normal:  cuero 1-2, carne podrida 1-3 y 1 alma de gigante.
-        // Mutado:  cuero 5-19, carne podrida 1-12 y 3 almas de gigante.
+        // ---- Botin del gigante muerto ----
+        // El botin base del zombie (cuero 1-2, carne podrida 1-3, 1 alma) esta en el .xdb (Loot),
+        // asi aparece en el bestiario. Cuando el gigante muere MUTADO se suelta aqui solo lo que falta
+        // para llegar al botin del mutante: cuero 5-19, carne podrida 1-12 y 3 almas en total.
         private static void SoltarBotinMuerto(Project project, Entity entidad, bool mutado)
         {
+            if (!mutado)
+            {
+                return;
+            }
             SubsystemPickables objetos = project.FindSubsystem<SubsystemPickables>(true);
             ComponentBody cuerpo = entidad.FindComponent<ComponentBody>();
             Vector3 posicion = cuerpo.Position + new Vector3(0f, 0.8f, 0f);
 
-            if (mutado)
-            {
-                Soltar(objetos, LeatherBlock.Index, s_random.Next(5, 20), posicion);
-                Soltar(objetos, RottenMeatBlock.Index, s_random.Next(1, 13), posicion);
-                Soltar(objetos, AlmaGiganteBlock.Index, 3, posicion);
-            }
-            else
-            {
-                Soltar(objetos, LeatherBlock.Index, s_random.Next(1, 3), posicion);
-                Soltar(objetos, RottenMeatBlock.Index, s_random.Next(1, 4), posicion);
-                Soltar(objetos, AlmaGiganteBlock.Index, 1, posicion);
-            }
+            Soltar(objetos, LeatherBlock.Index, s_random.Next(4, 18), posicion);     // + 1-2 del xdb = 5-19
+            Soltar(objetos, RottenMeatBlock.Index, s_random.Next(0, 10), posicion);  // + 1-3 del xdb = 1-12
+            Soltar(objetos, AlmaGiganteBlock.Index, 2, posicion);                    // + 1 del xdb = 3
         }
 
         private static void Soltar(SubsystemPickables objetos, int bloque, int cantidad, Vector3 posicion)

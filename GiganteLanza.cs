@@ -14,7 +14,7 @@ namespace Game
     public class GiganteLanzaLoader : ModLoader
     {
         // Nombres (DisplayName del .xdb) de los gigantes con slot. El zombie NO va aqui.
-        static readonly string[] Lanceros = { "Gigante pequeno", "Gigante pequeno canibal" };
+        static readonly string[] Lanceros = { "Gigante pequeno", "Gigante pequeno canibal", "Gigante de hielo" };
 
         const float DistanciaMin = 5f;    // mas cerca que esto pelea cuerpo a cuerpo
         const float DistanciaMax = 20f;   // mas lejos no lanza
