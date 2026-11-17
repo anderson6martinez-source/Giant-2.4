@@ -61,10 +61,13 @@ namespace GiganteCode
         // ---------------- Generacion del refugio (hilo del terreno) ----------------
         // Hook del API 1.8 - 1.9: agrega un paso a la generacion de chunks (paso 4, orden 1500)
         public override void TerrainContentsGenerator24Initialize(
-            TerrainContentsGenerator24 generator,
+            ITerrainContentsGenerator generator,
             SubsystemTerrain subsystemTerrain)
         {
-            generator.ChunkGenerationStep4.Add(
+            // el hook entrega la interfaz; el generador 2.4 es el que tiene los pasos de generacion
+            TerrainContentsGenerator24 generador = generator as TerrainContentsGenerator24;
+            if (generador == null) return;
+            generador.ChunkGenerationStep4.Add(
                 new ChunkGenerationStep(1500, chunk => GenerarEnChunkSeguro(chunk)));
         }
 
