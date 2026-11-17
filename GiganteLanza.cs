@@ -14,7 +14,27 @@ namespace Game
     public class GiganteLanzaLoader : ModLoader
     {
         // Nombres (DisplayName del .xdb) de los gigantes con slot. El zombie NO va aqui.
-        static readonly string[] Lanceros = { "Gigante pequeno", "Gigante pequeno canibal", "Gigante de hielo" };
+        static readonly string[] Lanceros = { "Gigante pequeno", "Gigante pequeno canibal", "Indigena", "Esqueleto" };
+
+        // Humanos pequenos lanceros (usan el modelo del humano con lanza y sin lanza)
+        static bool EsHumanoLancero(string nombre)
+        {
+            return nombre == "Indigena" || nombre == "Esqueleto";
+        }
+
+        // El gigante de hielo (cualquier DisplayName que contenga "hielo") tambien es lancero,
+        // pero nace con la lanza de hielo (LanzaHieloBlock) en vez de la de madera.
+        const string TextoGiganteHielo = "hielo";
+
+        static bool EsGiganteHielo(string nombre)
+        {
+            return nombre != null && nombre.IndexOf(TextoGiganteHielo, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        static bool EsLancero(string nombre)
+        {
+            return Array.IndexOf(Lanceros, nombre) >= 0 || EsGiganteHielo(nombre);
+        }
 
         const float DistanciaMin = 5f;    // mas cerca que esto pelea cuerpo a cuerpo
         const float DistanciaMax = 20f;   // mas lejos no lanza
@@ -70,11 +90,23 @@ namespace Game
             return Terrain.MakeBlockValue(BlocksManager.FindBlockByTypeName(TipoLanza, true).BlockIndex, 0, 0);
         }
 
+        static int ValorLanzaHielo()
+        {
+            return Terrain.MakeBlockValue(GiganteCode.LanzaHieloBlock.Index, 0, 0);
+        }
+
+        // lanza inicial segun el tipo de gigante
+        static int LanzaInicial(string nombre)
+        {
+            return EsGiganteHielo(nombre) ? ValorLanzaHielo() : ValorLanza();
+        }
+
+        // cualquier lanza: las del juego y LanzaHieloBlock (que hereda de SpearBlock)
         static bool EsLanza(int valor)
         {
             if (valor == 0) return false;
             Block bloque = BlocksManager.Blocks[Terrain.ExtractContents(valor)];
-            return bloque.GetType().Name.EndsWith("SpearBlock");
+            return bloque is SpearBlock || bloque.GetType().Name.EndsWith("SpearBlock");
         }
 
         // modelo con lanza en la mano solo si lleva una lanza; si no, modelo sin lanza
@@ -82,7 +114,10 @@ namespace Game
         {
             try
             {
-                string modelo = EsLanza(valor) ? "Models/GigantePequeno" : "Models/GigantePequenoSinLanza";
+                bool conLanza = EsLanza(valor);
+                string modelo = EsHumanoLancero(gigante.DisplayName)
+                    ? (conLanza ? "Models/IndigenaLanza" : "Models/HumanoPequeno")
+                    : (conLanza ? "Models/GigantePequeno" : "Models/GigantePequenoSinLanza");
                 gigante.ComponentCreatureModel.Model = ContentManager.Get<Model>(modelo);
             }
             catch (Exception)
@@ -99,11 +134,11 @@ namespace Game
             foreach (ComponentCreature gigante in creaturas.Creatures)
             {
                 // solo los lanceros tienen slot (el gigante muerto queda fuera aqui)
-                if (Array.IndexOf(Lanceros, gigante.DisplayName) < 0) continue;
+                if (!EsLancero(gigante.DisplayName)) continue;
                 if (gigante.ComponentBody == null || gigante.ComponentHealth == null) continue;
 
-                // gigante nuevo: nace con una lanza de madera en el slot (el modelo base ya la tiene)
-                if (!slot.ContainsKey(gigante)) slot[gigante] = ValorLanza();
+                // gigante nuevo: nace con su lanza en el slot (madera; el de hielo, la lanza de hielo)
+                if (!slot.ContainsKey(gigante)) slot[gigante] = LanzaInicial(gigante.DisplayName);
 
                 // si muere, suelta lo que lleva
                 if (gigante.ComponentHealth.Health <= 0f)

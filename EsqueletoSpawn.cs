@@ -8,8 +8,10 @@ namespace GiganteCode
 {
     // Esqueletos (aparecen en manada de 4 a 8) y zombis indigenas: estadisticas de dia y de noche.
     //
-    // ESQUELETO   dia: 10 de vida, 0.5 de dano, 15 km/h     noche: 20 de vida, 1 de dano, 15 km/h, ojos rojos
-    // INDIGENA    dia: 18 de vida, 1.5 de dano, 9 km/h     noche: 30 de vida, 2 de dano, 14 km/h, ojos rojos
+    // ESQUELETO   dia: 15 de vida, 0.5 de dano, 15 km/h     noche: 25 de vida, 1 de dano, 15 km/h, ojos rojos
+    // ZOMBI INDIGENA  dia: 23 de vida, 1.5 de dano, 9 km/h  noche: 35 de vida, 2 de dano, 14 km/h, ojos rojos
+    // INDIGENA (normal, plantilla "Indigena"): usa los valores del .xdb (18 de vida, 1.8 de dano, 12 km/h),
+    //   sale en tribus de 2 a 4, se defiende con los de su tribu y caza presas terrestres (jabalies, etc.)
     //
     // La distancia a la que ven al jugador (15 bloques el esqueleto, 25 el indigena) y los sonidos
     // estan en el .xdb (el esqueleto no tiene sfx; el indigena usa los del gigante muerto).
@@ -31,11 +33,20 @@ namespace GiganteCode
         private const int GrupoIndigenaMin = 1;
         private const int GrupoIndigenaMax = 2;
 
+        // ---- Indigena normal (plantilla "Indigena" del .xdb) ----
+        // No es zombi: no tiene buff de noche ni ojos rojos; usa las estadisticas del .xdb.
+        private const string PlantillaTribu = "Indigena";
+        private const float PesoTribu = 0.5f;         // frecuencia de aparicion
+        private const int TribuMin = 2;               // salen en tribus de 2 a 4
+        private const int TribuMax = 4;
+        private const bool TribuCazaPresas = true;    // cazan jabalies y otras presas terrestres
+        private const float RadioCazaPresas = 20f;    // a que distancia buscan presas (bloques)
+
         // Vida (AttackResilience), dano (AttackPower) y velocidad (km/h) por tipo y momento del dia
-        private const float EsqVidaDia = 10f, EsqDanoDia = 0.5f, EsqKmhDia = 15f;
-        private const float EsqVidaNoche = 20f, EsqDanoNoche = 1f, EsqKmhNoche = 15f;
-        private const float IndVidaDia = 18f, IndDanoDia = 1.5f;
-        private const float IndVidaNoche = 30f, IndDanoNoche = 2f;
+        private const float EsqVidaDia = 15f, EsqDanoDia = 0.5f, EsqKmhDia = 15f;
+        private const float EsqVidaNoche = 25f, EsqDanoNoche = 1f, EsqKmhNoche = 15f;
+        private const float IndVidaDia = 23f, IndDanoDia = 1.5f;
+        private const float IndVidaNoche = 35f, IndDanoNoche = 2f;
         private const float IndKmhDia = 9f, IndKmhNoche = 14f;
 
         // ---- Instinto de manada ----
@@ -70,6 +81,7 @@ namespace GiganteCode
         private double proximaRevision;
         private double proximaLimpieza;
         private double proximaCaza;
+        private double proximaCazaPresas;
         private readonly HashSet<Entity> suscritos = new HashSet<Entity>();
 
         // valores originales (los de la plantilla) de cada criatura la primera vez que se la ve
@@ -100,6 +112,9 @@ namespace GiganteCode
             // zombis indigenas: grupos pequenos
             AgregarTipo(subsystemCreatureSpawn, subsystemTerrain, creatureTypes, random,
                 PlantillaIndigena, PesoIndigena, GrupoIndigenaMin, GrupoIndigenaMax);
+            // indigenas normales: tribus de 2 a 4
+            AgregarTipo(subsystemCreatureSpawn, subsystemTerrain, creatureTypes, random,
+                PlantillaTribu, PesoTribu, TribuMin, TribuMax);
         }
 
         private static void AgregarTipo(
@@ -156,6 +171,7 @@ namespace GiganteCode
             proximaRevision = 0;
             proximaLimpieza = 0;
             proximaCaza = 0;
+            proximaCazaPresas = 0;
             suscritos.Clear();
             bases.Clear();
             texturasOjos.Clear();
@@ -215,7 +231,7 @@ namespace GiganteCode
                 }
                 else
                 {
-                    // indigena: de dia 18 de vida y 1.5 de dano; de noche 30 y 2
+                    // zombi indigena: de dia 23 de vida y 1.5 de dano; de noche 35 y 2
                     nuevaVida = noche ? IndVidaNoche : IndVidaDia;
                     nuevoDano = noche ? IndDanoNoche : IndDanoDia;
                     nuevaVelocidad = (noche ? IndKmhNoche : IndKmhDia) * KmhAMs;
@@ -239,6 +255,7 @@ namespace GiganteCode
             }
 
             RevisarManadas();
+            CazarPresas();
 
             // limpieza de criaturas que ya no existen (cada ~10 s)
             if (tiempo.GameTime >= proximaLimpieza)
@@ -271,6 +288,8 @@ namespace GiganteCode
         private static string Grupo(ComponentCreature c)
         {
             string plantilla = NombrePlantilla(c);
+            // indigenas normales: se defienden solo entre ellos (la tribu)
+            if (plantilla == PlantillaTribu) return "tribu";
             // esqueletos: se defienden solo entre ellos
             if (plantilla == PlantillaEsqueleto) return "esqueleto";
             // gigantes zombis (muerto y mutante) + zombis indigenas: se defienden mutuamente
@@ -337,6 +356,50 @@ namespace GiganteCode
             }
         }
 
+        // los indigenas normales cazan presas terrestres (jabalies, vacas...) cercanas
+        private void CazarPresas()
+        {
+            if (!TribuCazaPresas) return;
+            if (tiempo.GameTime < proximaCazaPresas) return;
+            proximaCazaPresas = tiempo.GameTime + PausaCaza;
+
+            foreach (ComponentCreature cazador in creaturas.Creatures)
+            {
+                if (!EstaViva(cazador) || NombrePlantilla(cazador) != PlantillaTribu) continue;
+
+                ComponentChaseBehavior persecucion = cazador.Entity.FindComponent<ComponentChaseBehavior>();
+                if (persecucion == null) continue;
+                if (persecucion.Target != null && EstaViva(persecucion.Target)) continue; // ya tiene objetivo
+
+                ComponentCreature masCercano = null;
+                float mejor = RadioCazaPresas;
+                foreach (ComponentCreature otro in creaturas.Creatures)
+                {
+                    if (!EsPresa(otro)) continue;
+                    float distancia = Vector3.Distance(cazador.ComponentBody.Position, otro.ComponentBody.Position);
+                    if (distancia < mejor)
+                    {
+                        mejor = distancia;
+                        masCercano = otro;
+                    }
+                }
+                if (masCercano != null)
+                {
+                    persecucion.Attack(masCercano, RangoDefensa, TiempoDefensa, false);
+                }
+            }
+        }
+
+        // presa = animal terrestre "LandOther" que no es jugador, ni gigante, ni de ninguna manada
+        private static bool EsPresa(ComponentCreature c)
+        {
+            if (!EstaViva(c)) return false;
+            if (c.Category != CreatureCategory.LandOther) return false;
+            if (c.Entity.FindComponent<ComponentPlayer>() != null) return false;
+            if (NombrePlantilla(c).StartsWith(PrefijoGigantes)) return false;
+            return Grupo(c) == null;
+        }
+
         // alguien de la manada fue atacado: los de su grupo que esten cerca atacan al agresor
         private void AlSerAtacado(ComponentCreature victima, ComponentCreature agresor)
         {
@@ -360,6 +423,8 @@ namespace GiganteCode
 
         private static bool EsIndigena(string plantilla, string nombre)
         {
+            // el indigena normal NO es zombi: no recibe el buff de noche ni caza gigantes
+            if (plantilla == PlantillaTribu) return false;
             return Contiene(plantilla, TextoIndigena) || Contiene(nombre, TextoIndigena);
         }
 
