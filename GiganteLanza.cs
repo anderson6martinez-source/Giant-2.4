@@ -22,18 +22,9 @@ namespace Game
             return nombre == "Indigena" || nombre == "Esqueleto";
         }
 
-        // El gigante de hielo (cualquier DisplayName que contenga "hielo") tambien es lancero,
-        // pero nace con la lanza de hielo (LanzaHieloBlock) en vez de la de madera.
-        const string TextoGiganteHielo = "hielo";
-
-        static bool EsGiganteHielo(string nombre)
-        {
-            return nombre != null && nombre.IndexOf(TextoGiganteHielo, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
         static bool EsLancero(string nombre)
         {
-            return Array.IndexOf(Lanceros, nombre) >= 0 || EsGiganteHielo(nombre);
+            return Array.IndexOf(Lanceros, nombre) >= 0;
         }
 
         const float DistanciaMin = 5f;    // mas cerca que esto pelea cuerpo a cuerpo
@@ -90,18 +81,13 @@ namespace Game
             return Terrain.MakeBlockValue(BlocksManager.FindBlockByTypeName(TipoLanza, true).BlockIndex, 0, 0);
         }
 
-        static int ValorLanzaHielo()
-        {
-            return Terrain.MakeBlockValue(GiganteCode.LanzaHieloBlock.Index, 0, 0);
-        }
-
-        // lanza inicial segun el tipo de gigante
+        // Todos los gigantes lanceros empiezan con una lanza de madera.
         static int LanzaInicial(string nombre)
         {
-            return EsGiganteHielo(nombre) ? ValorLanzaHielo() : ValorLanza();
+            return ValorLanza();
         }
 
-        // cualquier lanza: las del juego y LanzaHieloBlock (que hereda de SpearBlock)
+        // cualquier lanza del juego (bloques que heredan de SpearBlock)
         static bool EsLanza(int valor)
         {
             if (valor == 0) return false;
