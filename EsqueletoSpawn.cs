@@ -63,8 +63,19 @@ namespace GiganteCode
         private const int GrupoNativoMax = 4;
         private const float RadioCazaPresas = 25f;
         private const double PausaCazaPresas = 1.5;
+        private const bool NativosCazan = false;     // false = el indigena NO sale a cazar por iniciativa (solo se defiende)
 
-        private const float LuzNoche = 0.3f;                     // SkyLightIntensity por debajo de esto = noche
+        // ---- Garrote (bate) del indigena ----
+        // Los indigenas (normal y zombi) nacen con el garrote de madera en la mano (modelo con el garrote fijo).
+        // El esqueleto y el chaman NO lo llevan. Ningun indigena lanza nada (ver GiganteLanza.cs).
+        private const string ModeloGarrote = "Models/HumanoPequenoGarrote";
+
+        private const float LuzNoche = 0.3f;                    // SkyLightIntensity por debajo de esto = noche
+
+        // ---- Paz indigena ----
+        // El indigena normal y el chaman NUNCA atacan al jugador por iniciativa propia: solo contraatacan
+        // (a el y a los de su grupo cercanos) cuando el jugador los golpea. Ver clase PazIndigena.
+        private const double PausaCalma = 0.1;        // cada cuanto se revisa que no persigan al jugador sin motivo
 
         private class Base
         {
@@ -82,7 +93,9 @@ namespace GiganteCode
         private double proximaLimpieza;
         private double proximaCaza;
         private double proximaCazaPresas;
+        private double proximaCalma;
         private readonly HashSet<Entity> suscritos = new HashSet<Entity>();
+        private readonly HashSet<Entity> conGarrote = new HashSet<Entity>();
 
         // valores originales (los de la plantilla) de cada criatura la primera vez que se la ve
         private readonly Dictionary<Entity, Base> bases = new Dictionary<Entity, Base>();
@@ -172,7 +185,10 @@ namespace GiganteCode
             proximaLimpieza = 0;
             proximaCaza = 0;
             proximaCazaPresas = 0;
+            proximaCalma = 0;
+            PazIndigena.Limpiar();
             suscritos.Clear();
+            conGarrote.Clear();
             bases.Clear();
             texturasOjos.Clear();
         }
@@ -180,7 +196,9 @@ namespace GiganteCode
         public override void OnProjectDisposed()
         {
             proyecto = null; creaturas = null; cielo = null; tiempo = null;
+            PazIndigena.Limpiar();
             suscritos.Clear();
+            conGarrote.Clear();
             bases.Clear();
             texturasOjos.Clear();
         }
@@ -189,6 +207,7 @@ namespace GiganteCode
         public override void SubsystemUpdate(float dt)
         {
             if (creaturas == null || cielo == null || tiempo == null) return;
+            CalmarNativos();
             if (tiempo.GameTime < proximaRevision) return;
             proximaRevision = tiempo.GameTime + 0.5;
 
@@ -254,6 +273,7 @@ namespace GiganteCode
                 }
             }
 
+            EquiparGarrotes();
             RevisarManadas();
             CazarPresas();
 
@@ -270,6 +290,51 @@ namespace GiganteCode
                 }
                 foreach (Entity e in viejas) bases.Remove(e);
                 suscritos.IntersectWith(vivas);
+                conGarrote.IntersectWith(vivas);
+                PazIndigena.LimpiarVencidas(tiempo.GameTime);
+            }
+        }
+
+        // ---------- garrote del indigena ----------
+        // Cada indigena (normal o zombi) recibe una sola vez el modelo con el garrote en la mano.
+        private void EquiparGarrotes()
+        {
+            foreach (ComponentCreature criatura in creaturas.Creatures)
+            {
+                if (conGarrote.Contains(criatura.Entity)) continue;
+                string plantilla = NombrePlantilla(criatura);
+                if (plantilla != PlantillaNativo && !EsIndigena(plantilla, criatura.DisplayName)) continue;
+
+                conGarrote.Add(criatura.Entity);
+                if (criatura.ComponentCreatureModel == null) continue;
+                try
+                {
+                    criatura.ComponentCreatureModel.Model = ContentManager.Get<Model>(ModeloGarrote);
+                }
+                catch (System.Exception e)
+                {
+                    Log.Warning("EsqueletoSpawn: falta " + ModeloGarrote + " (" + e.Message + ")");
+                }
+            }
+        }
+
+        // ---------- paz indigena ----------
+        // Si un indigena normal o un chaman tiene al jugador como objetivo sin que el jugador los haya atacado,
+        // se le quita el objetivo. Asi no atacan por iniciativa propia, pero si contraatacan al ser golpeados.
+        private void CalmarNativos()
+        {
+            double ahora = tiempo.GameTime;
+            if (ahora < proximaCalma) return;
+            proximaCalma = ahora + PausaCalma;
+
+            foreach (ComponentCreature criatura in creaturas.Creatures)
+            {
+                if (!EstaViva(criatura) || !PazIndigena.EsNativo(criatura)) continue;
+                ComponentChaseBehavior persecucion = criatura.Entity.FindComponent<ComponentChaseBehavior>();
+                if (persecucion == null) continue;
+                ComponentCreature objetivo = persecucion.Target;
+                if (objetivo == null || PazIndigena.PuedeAtacar(criatura, objetivo, ahora)) continue;
+                PazIndigena.DetenerAtaque(persecucion);
             }
         }
 
@@ -369,6 +434,7 @@ namespace GiganteCode
 
         private void CazarPresas()
         {
+            if (!NativosCazan) return;
             if (tiempo.GameTime < proximaCazaPresas) return;
             proximaCazaPresas = tiempo.GameTime + PausaCazaPresas;
 
@@ -406,10 +472,18 @@ namespace GiganteCode
             string grupo = Grupo(victima);
             if (grupo == null || Grupo(agresor) == grupo) return; // fuego amigo: no se atacan entre ellos
 
+            // indigenas normales y chaman: si el agresor es el jugador, a partir de ahora tienen permiso de
+            // atacarlo (la victima y los de su grupo cercanos). Sin esto, CalmarNativos les quita el objetivo.
+            // (ahora vale para cualquier agresor, no solo el jugador: solo se defienden de quien los ataca)
+            bool provocadoPorJugador = grupo == "nativo";
+            double permisoHasta = tiempo.GameTime + TiempoDefensa + 5.0;
+            if (provocadoPorJugador) PazIndigena.Provocar(victima, agresor, permisoHasta);
+
             foreach (ComponentCreature aliado in creaturas.Creatures)
             {
                 if (aliado == victima || !EstaViva(aliado) || Grupo(aliado) != grupo) continue;
                 if (Vector3.Distance(victima.ComponentBody.Position, aliado.ComponentBody.Position) > RadioManada) continue;
+                if (provocadoPorJugador) PazIndigena.Provocar(aliado, agresor, permisoHasta);
 
                 ComponentChaseBehavior persecucion = aliado.Entity.FindComponent<ComponentChaseBehavior>();
                 if (persecucion == null) continue;
@@ -449,6 +523,88 @@ namespace GiganteCode
             }
             texturasOjos[plantilla] = textura;
             return textura;
+        }
+    }
+
+    // Registro de quien tiene permiso de atacar a quien: indigena normal y chaman solo pueden atacar al
+    // jugador que los golpeo (permiso temporal). Lo usan EsqueletoSpawn.cs y ChamanSpawn.cs.
+    public static class PazIndigena
+    {
+        // nativo -> (agresor -> permiso hasta)
+        private static readonly Dictionary<ComponentCreature, Dictionary<ComponentCreature, double>> provocados =
+            new Dictionary<ComponentCreature, Dictionary<ComponentCreature, double>>();
+        private static System.Reflection.MethodInfo metodoDetener;
+        private static bool detenerBuscado;
+
+        // plantillas del .xdb que no atacan al jugador por iniciativa propia
+        public static bool EsNativo(ComponentCreature c)
+        {
+            if (c == null) return false;
+            string plantilla = c.Entity.ValuesDictionary.DatabaseObject.Name;
+            return plantilla == "Indigena" || plantilla == "Chaman";
+        }
+
+        public static bool EsJugador(ComponentCreature c)
+        {
+            return c != null && c.Entity.FindComponent<ComponentPlayer>() != null;
+        }
+
+        public static void Provocar(ComponentCreature nativo, ComponentCreature jugador, double hasta)
+        {
+            // "jugador" es en realidad cualquier agresor
+            if (nativo == null || jugador == null) return;
+            Dictionary<ComponentCreature, double> d;
+            if (!provocados.TryGetValue(nativo, out d))
+            {
+                d = new Dictionary<ComponentCreature, double>();
+                provocados[nativo] = d;
+            }
+            d[jugador] = hasta;
+        }
+
+        // true si "nativo" puede tener a "objetivo" como objetivo de ataque:
+        // el indigena normal y el chaman solo atacan a quien los ataco a ellos o a los suyos
+        public static bool PuedeAtacar(ComponentCreature nativo, ComponentCreature objetivo, double ahora)
+        {
+            if (!EsNativo(nativo)) return true;
+            Dictionary<ComponentCreature, double> d;
+            double hasta;
+            return provocados.TryGetValue(nativo, out d) && d.TryGetValue(objetivo, out hasta) && ahora < hasta;
+        }
+
+        public static void DetenerAtaque(ComponentChaseBehavior persecucion)
+        {
+            if (!detenerBuscado)
+            {
+                detenerBuscado = true;
+                metodoDetener = typeof(ComponentChaseBehavior).GetMethod("StopAttack",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public
+                    | System.Reflection.BindingFlags.NonPublic, null, System.Type.EmptyTypes, null);
+                if (metodoDetener == null)
+                    Log.Warning("PazIndigena: ComponentChaseBehavior no tiene StopAttack() en esta version del juego");
+            }
+            if (metodoDetener != null) metodoDetener.Invoke(persecucion, null);
+        }
+
+        public static void LimpiarVencidas(double ahora)
+        {
+            var vacios = new List<ComponentCreature>();
+            foreach (KeyValuePair<ComponentCreature, Dictionary<ComponentCreature, double>> par in provocados)
+            {
+                var caducados = new List<ComponentCreature>();
+                foreach (KeyValuePair<ComponentCreature, double> a in par.Value)
+                {
+                    if (ahora >= a.Value) caducados.Add(a.Key);
+                }
+                foreach (ComponentCreature c in caducados) par.Value.Remove(c);
+                if (par.Value.Count == 0) vacios.Add(par.Key);
+            }
+            foreach (ComponentCreature c in vacios) provocados.Remove(c);
+        }
+
+        public static void Limpiar()
+        {
+            provocados.Clear();
         }
     }
 }

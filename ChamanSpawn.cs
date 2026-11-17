@@ -1,5 +1,6 @@
 // Chaman indigena (plantilla "Chaman" del .xdb):
-//  - Maldicion: prende fuego a su objetivo (el jugador o el agresor) por 3 segundos. Enfriamiento de 6 segundos.
+//  - Maldicion: prende fuego SOLO a quien lo ataco a el o a los suyos (jugador, animal o gigante) por 3 segundos.
+//    Nunca maldice por iniciativa propia. Enfriamiento de 6 segundos.
 //  - Cura: cada 5 segundos recupera 3 puntos de vida a los indigenas normales a menos de 10 bloques,
 //    y sobre cada indigena curado sube un corazon (senal de que lo curo).
 // No aparece solo por el mundo: lo agrega RefugioIndigenaSpawn en algunos refugios (o sale de su huevo).
@@ -8,6 +9,7 @@ using System.Collections.Generic;
 using Engine;
 using Engine.Graphics;
 using GameEntitySystem;
+using GiganteCode;
 
 namespace Game
 {
@@ -111,6 +113,10 @@ namespace Game
             ComponentChaseBehavior persecucion = chaman.Entity.FindComponent<ComponentChaseBehavior>();
             ComponentCreature objetivo = persecucion != null ? persecucion.Target : null;
             if (!EstaViva(objetivo)) return;
+
+            // el chaman no maldice por iniciativa propia (a nadie): solo a quien lo ataco a el o a los suyos
+            // (PazIndigena registra a cualquier agresor, no solo al jugador)
+            if (!PazIndigena.PuedeAtacar(chaman, objetivo, ahora)) return;
 
             Vector3 origen = chaman.ComponentBody.Position + new Vector3(0f, chaman.ComponentBody.BoxSize.Y * 0.8f, 0f);
             Vector3 destino = objetivo.ComponentBody.Position + new Vector3(0f, objetivo.ComponentBody.BoxSize.Y * 0.5f, 0f);

@@ -25,6 +25,11 @@ namespace Game
         public const float SaludPorCorazon = 0.1f;
         public const double Recarga = 6.0; // segundos entre usos (0 = sin espera)
 
+        // Stats de herramienta
+        public const int Durabilidad = 40;          // usos (cada cura gasta 1)
+        public const float PoderMelee = 1.5f;       // dano al golpear
+        public const float ProbabilidadGolpe = 0.7f;
+
         // Si el baculo se ve girado en el icono o en la mano, cambia esta matriz
         // (por ejemplo Matrix.CreateRotationX(MathUtils.PI / 2f)).
         private static readonly Matrix AjusteModelo = Matrix.Identity;
@@ -37,6 +42,21 @@ namespace Game
             DefaultDisplayName = "Baculo Magico";
             DefaultDescription = "Un baculo con un corazon flotante. Al usarlo cura 3 corazones.";
             DefaultCategory = "Tools";
+
+            // Es una herramienta: no se coloca, no se apila, tiene durabilidad y dano propio.
+            Durability = Durabilidad;
+            DefaultMeleePower = PoderMelee;
+            DefaultMeleeHitProbability = ProbabilidadGolpe;
+            DefaultProjectilePower = 1f; // no es lanzable: solo cura (no tiene comportamiento de apuntar)
+            MaxStacking = 1;
+            IsCollidable = false;
+        }
+
+        // Nunca se coloca como bloque (era lo que creaba el bloque invisible)
+        public override BlockPlacementData GetPlacementValue(SubsystemTerrain subsystemTerrain,
+            ComponentMiner componentMiner, int value, TerrainRaycastResult raycastResult)
+        {
+            return default(BlockPlacementData);
         }
 
         public override void Initialize()
@@ -98,14 +118,16 @@ namespace Game
             if (componentMiner == null || componentMiner.ComponentCreature == null)
                 return false;
 
+            // Siempre devuelve true: el uso queda "consumido" y el juego nunca intenta colocar un bloque.
             ComponentHealth salud = componentMiner.ComponentCreature.ComponentHealth;
             if (salud == null || salud.Health >= 1f)
-                return false;
+                return true; // vida llena: no gasta durabilidad
             if (m_subsystemTime.GameTime < m_proximoUso)
                 return true;
 
             salud.Heal(BaculoMagicoBlock.Corazones * BaculoMagicoBlock.SaludPorCorazon);
             m_proximoUso = m_subsystemTime.GameTime + BaculoMagicoBlock.Recarga;
+            componentMiner.DamageActiveTool(1); // gasta 1 de durabilidad (de 40)
             return true;
         }
     }
