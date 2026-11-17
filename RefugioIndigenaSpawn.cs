@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Engine;
 using Game;
+using GameEntitySystem;
 
 namespace GiganteCode
 {
@@ -25,7 +26,7 @@ namespace GiganteCode
 
         private SubsystemCreatureSpawn subsystemCreatureSpawn;
         private SubsystemCreatureSpawn.CreatureType tipoRefugio;
-        private readonly Random random = new Random();
+        private readonly System.Random random = new System.Random();
 
         public override void __ModInitialize()
         {
@@ -50,7 +51,7 @@ namespace GiganteCode
             creatureTypes.Add(tipoRefugio);
         }
 
-        public override void TerrainContentsGenerator24Initialize(
+        public void TerrainContentsGenerator24Initialize(
             TerrainContentsGenerator24 generator,
             SubsystemTerrain subsystemTerrain)
         {
@@ -64,7 +65,7 @@ namespace GiganteCode
             unchecked
             {
                 int seed = chunk.Coords.X * 73856093 ^ chunk.Coords.Y * 19349663;
-                Random rng = new Random(seed);
+                System.Random rng = new System.Random(seed);
                 if (rng.NextDouble() >= Frecuencia)
                     return;
             }
