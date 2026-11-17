@@ -8,314 +8,235 @@ using GameEntitySystem;
 namespace GiganteCode
 {
     /// <summary>
-    /// Genera refugios de madera dispersos por el mundo y los puebla con indigenas normales.
-    /// Para API 1.8 - 1.9. No modifica la aparicion normal de los indigenas ni sus estadisticas.
+    /// Genera refugios dispersos en chunks nuevos. No modifica el spawn normal
+    /// de los indigenas ni sus estadisticas.
     /// </summary>
     public class RefugioIndigenaSpawnLoader : ModLoader
     {
-        // ---------------- Configuracion ----------------
-        private const float Frecuencia = 0.06f;               // probabilidad por chunk nuevo (~1 de cada 16 chunks)
-        private const string PlantillaIndigena = "Indigena";  // Name de la plantilla del indigena normal en el .xdb
-        private const int IndigenasMin = 3;
-        private const int IndigenasMax = 5;
-        private const int MaxVariacionTerreno = 3;            // desnivel maximo permitido bajo el refugio
-        private const float DistanciaActivacion = 60f;        // los indigenas aparecen cuando el jugador esta a menos de esto
-        private const float RadioComprobacion = 20f;          // si ya hay indigenas a este radio, no se agregan mas
+        private const float Frecuencia = 0.17f;
+        private const string PlantillaIndigena = "Indigena";
 
-        // Posicion y tamano del refugio dentro del chunk (16x16): queda siempre dentro del chunk
-        private const int X0 = 4;
-        private const int Z0 = 4;
-        private const int Ancho = 8;
-        private const int Fondo = 8;
+        // IDs vanilla usados en Survivalcraft.
+        private const int Tablones = 21;
+        private const int Tronco = 23;
+        private const int Antorcha = 31;
 
-        private struct Refugio
-        {
-            public int X;      // esquina del refugio (coordenadas del mundo)
-            public int Z;
-            public int Suelo;  // altura del bloque del piso
-        }
+        private static readonly ConcurrentQueue<Point3> RefugiosPendientes =
+            new ConcurrentQueue<Point3>();
 
-        // Los chunks se generan en otro hilo: se guardan aqui y se procesan en el hilo principal
-        private static readonly ConcurrentQueue<Refugio> RefugiosNuevos = new ConcurrentQueue<Refugio>();
-
-        private readonly List<Refugio> pendientes = new List<Refugio>();
-        private readonly HashSet<long> poblados = new HashSet<long>();
+        private SubsystemCreatureSpawn subsystemCreatureSpawn;
+        private SubsystemCreatureSpawn.CreatureType tipoRefugio;
         private readonly System.Random random = new System.Random();
-
-        private SubsystemCreatureSpawn creaturas;
-        private SubsystemTerrain terreno;
-        private SubsystemPlayers jugadores;
-        private SubsystemTime tiempo;
-        private double proximaRevision;
 
         public override void __ModInitialize()
         {
-            ModsManager.RegisterHook("TerrainContentsGenerator24Initialize", this);
+            ModsManager.RegisterHook("InitializeCreatureTypes", this);
             ModsManager.RegisterHook("OnProjectLoaded", this);
             ModsManager.RegisterHook("OnProjectDisposed", this);
             ModsManager.RegisterHook("SubsystemUpdate", this);
+            ModsManager.RegisterHook("TerrainContentsGenerator24Initialize", this);
         }
 
-        // ---------------- Generacion del refugio (hilo del terreno) ----------------
-        // Hook del API 1.8 - 1.9: agrega un paso a la generacion de chunks (paso 4, orden 1500)
+        public override void InitializeCreatureTypes(
+            SubsystemCreatureSpawn subsystem,
+            List<SubsystemCreatureSpawn.CreatureType> creatureTypes)
+        {
+            // Tipo auxiliar sin spawn natural: solo se invoca al encontrar refugios.
+            tipoRefugio = new SubsystemCreatureSpawn.CreatureType(
+                PlantillaIndigena, SpawnLocationType.Surface, true, false);
+
+            tipoRefugio.SpawnSuitabilityFunction =
+                (SubsystemCreatureSpawn.CreatureType t, Point3 p) => 0f;
+
+            tipoRefugio.SpawnFunction =
+                (SubsystemCreatureSpawn.CreatureType t, Point3 p) => 0;
+
+            creatureTypes.Add(tipoRefugio);
+        }
+
         public void TerrainContentsGenerator24Initialize(
             TerrainContentsGenerator24 generator,
             SubsystemTerrain subsystemTerrain)
         {
             generator.ChunkGenerationStep4.Add(
-                new ChunkGenerationStep(1500, chunk => GenerarEnChunkSeguro(chunk)));
-        }
-
-        private static void GenerarEnChunkSeguro(TerrainChunk chunk)
-        {
-            try
-            {
-                GenerarEnChunk(chunk);
-            }
-            catch (Exception e)
-            {
-                Log.Warning("RefugioIndigena: error al generar en el chunk (" + e.Message + ")");
-            }
+                new ChunkGenerationStep(1500, chunk => GenerarEnChunk(chunk)));
         }
 
         private static void GenerarEnChunk(TerrainChunk chunk)
         {
-            // Aleatorio determinista por chunk: si el chunk se regenera, sale el mismo refugio
-            System.Random rng = new System.Random(
-                unchecked(chunk.Coords.X * 73856093 ^ chunk.Coords.Y * 19349663 ^ 0x5BD1E995));
-            if (rng.NextDouble() >= Frecuencia) return;
-
-            // Altura del suelo en cada columna del terreno que ocupara el refugio
-            int[,] suelos = new int[Ancho, Fondo];
-            int minimo = int.MaxValue;
-            int maximo = int.MinValue;
-            for (int x = 0; x < Ancho; x++)
+            // Probabilidad determinista del 17 % por cada chunk nuevo.
+            unchecked
             {
-                for (int z = 0; z < Fondo; z++)
-                {
-                    int y = BuscarSuelo(chunk, X0 + x, Z0 + z);
-                    if (y < 2) return;                       // agua, hielo o sin suelo: no se construye
-                    suelos[x, z] = y;
-                    if (y < minimo) minimo = y;
-                    if (y > maximo) maximo = y;
-                }
+                int seed = chunk.Coords.X * 73856093 ^ chunk.Coords.Y * 19349663;
+                System.Random rng = new System.Random(seed);
+
+                if (rng.NextDouble() >= Frecuencia)
+                    return;
             }
-            if (maximo - minimo > MaxVariacionTerreno) return; // terreno demasiado irregular
 
-            int suelo = maximo;                              // el piso queda a la altura del punto mas alto
-            if (suelo + 8 >= TerrainChunk.Height) return;
+            // La construcción queda dentro del chunk para no modificar vecinos.
+            const int x0 = 4;
+            const int z0 = 4;
+            const int ancho = 8;
+            const int fondo = 8;
 
-            int tablones = PlanksBlock.Index;
-            int madera = OakWoodBlock.Index;
-            int adoquin = CobblestoneBlock.Index;
-            int vidrio = GlassBlock.Index;
+            int minY = 255;
+            int maxY = 0;
+            int sumaY = 0;
 
-            // 1) Despejar el espacio (quita arboles y plantas) incluyendo el alero del techo
-            for (int x = -1; x <= Ancho; x++)
-                for (int z = -1; z <= Fondo; z++)
-                    for (int y = suelo + 1; y <= suelo + 8; y++)
-                        Poner(chunk, X0 + x, y, Z0 + z, 0);
-
-            // 2) Cimientos de adoquin bajo las columnas mas bajas y piso de tablones
-            for (int x = 0; x < Ancho; x++)
+            for (int x = x0; x < x0 + ancho; x++)
             {
-                for (int z = 0; z < Fondo; z++)
+                for (int z = z0; z < z0 + fondo; z++)
                 {
-                    for (int y = suelos[x, z] + 1; y < suelo; y++)
-                        Poner(chunk, X0 + x, y, Z0 + z, adoquin);
-                    Poner(chunk, X0 + x, suelo, Z0 + z, tablones);
+                    int y = BuscarSuelo(chunk, x, z);
+
+                    if (y < 1)
+                        return;
+
+                    minY = Math.Min(minY, y);
+                    maxY = Math.Max(maxY, y);
+                    sumaY += y;
                 }
             }
 
-            // 3) Paredes de tablones (3 de alto)
+            // Evita colocar el refugio en pendientes fuertes o terreno irregular.
+            if (maxY - minY > 2)
+                return;
+
+            int suelo = sumaY / (ancho * fondo);
+            int mundoX = chunk.Origin.X + x0;
+            int mundoZ = chunk.Origin.Y + z0;
+
+            // Piso.
+            for (int x = 0; x < ancho; x++)
+                for (int z = 0; z < fondo; z++)
+                    Poner(chunk, x0 + x, suelo, z0 + z, Tablones);
+
+            // Paredes.
             for (int y = 1; y <= 3; y++)
             {
-                for (int x = 0; x < Ancho; x++)
+                for (int x = 0; x < ancho; x++)
                 {
-                    Poner(chunk, X0 + x, suelo + y, Z0, tablones);
-                    Poner(chunk, X0 + x, suelo + y, Z0 + Fondo - 1, tablones);
+                    Poner(chunk, x0 + x, suelo + y, z0, Tablones);
+                    Poner(chunk, x0 + x, suelo + y, z0 + fondo - 1, Tablones);
                 }
-                for (int z = 0; z < Fondo; z++)
+
+                for (int z = 0; z < fondo; z++)
                 {
-                    Poner(chunk, X0, suelo + y, Z0 + z, tablones);
-                    Poner(chunk, X0 + Ancho - 1, suelo + y, Z0 + z, tablones);
+                    Poner(chunk, x0, suelo + y, z0 + z, Tablones);
+                    Poner(chunk, x0 + ancho - 1, suelo + y, z0 + z, Tablones);
                 }
             }
 
-            // 4) Postes de madera en las esquinas
-            int[] esquinasX = { X0, X0 + Ancho - 1 };
-            int[] esquinasZ = { Z0, Z0 + Fondo - 1 };
-            foreach (int x in esquinasX)
-                foreach (int z in esquinasZ)
-                    for (int y = 1; y <= 4; y++)
-                        Poner(chunk, x, suelo + y, z, madera);
+            // Postes de tronco en las esquinas.
+            int[] esquinas = { x0, x0 + ancho - 1 };
 
-            // 5) Ventanas de vidrio
-            int medioZ = Z0 + Fondo / 2;
-            Poner(chunk, X0, suelo + 2, medioZ, vidrio);
-            Poner(chunk, X0 + Ancho - 1, suelo + 2, medioZ, vidrio);
-            Poner(chunk, X0 + Ancho / 2, suelo + 2, Z0 + Fondo - 1, vidrio);
-
-            // 6) Techo: alero de tablones y dos escalones encima
-            for (int x = -1; x <= Ancho; x++)
-                for (int z = -1; z <= Fondo; z++)
-                    Poner(chunk, X0 + x, suelo + 4, Z0 + z, tablones);
-
-            for (int x = 1; x < Ancho - 1; x++)
-                for (int z = 1; z < Fondo - 1; z++)
-                    Poner(chunk, X0 + x, suelo + 5, Z0 + z, tablones);
-
-            for (int x = 2; x < Ancho - 2; x++)
-                for (int z = 2; z < Fondo - 2; z++)
-                    Poner(chunk, X0 + x, suelo + 6, Z0 + z, tablones);
-
-            // 7) Puerta (hueco de 1x2 al frente) y escalon de entrada
-            int puertaX = X0 + Ancho / 2;
-            Poner(chunk, puertaX, suelo + 1, Z0, 0);
-            Poner(chunk, puertaX, suelo + 2, Z0, 0);
-            Poner(chunk, puertaX, suelo, Z0 - 1, tablones);
-
-            // 8) Interior: mesa de crafteo en una esquina y dos antorchas en el suelo
-            Poner(chunk, X0 + 1, suelo + 1, Z0 + Fondo - 2, CraftingTableBlock.Index);
-            int antorcha = Terrain.MakeBlockValue(TorchBlock.Index, 0, 4);
-            PonerValor(chunk, X0 + 1, suelo + 1, Z0 + 1, antorcha);
-            PonerValor(chunk, X0 + Ancho - 2, suelo + 1, Z0 + 1, antorcha);
-
-            RefugiosNuevos.Enqueue(new Refugio
+            foreach (int x in esquinas)
             {
-                X = chunk.Origin.X + X0,
-                Z = chunk.Origin.Y + Z0,
-                Suelo = suelo
-            });
+                foreach (int z in new int[] { z0, z0 + fondo - 1 })
+                {
+                    for (int y = 1; y <= 4; y++)
+                        Poner(chunk, x, suelo + y, z, Tronco);
+                }
+            }
+
+            // Techo con alero y parte superior escalonada.
+            for (int x = -1; x <= ancho; x++)
+                for (int z = -1; z <= fondo; z++)
+                    Poner(chunk, x0 + x, suelo + 4, z0 + z, Tablones);
+
+            for (int x = 1; x < ancho - 1; x++)
+            {
+                Poner(chunk, x0 + x, suelo + 5, z0 + 1, Tablones);
+                Poner(chunk, x0 + x, suelo + 5, z0 + fondo - 2, Tablones);
+            }
+
+            for (int z = 2; z < fondo - 2; z++)
+                Poner(chunk, x0 + ancho / 2, suelo + 5, z0 + z, Tablones);
+
+            // Entrada y espacio interior.
+            for (int y = 1; y <= 2; y++)
+                Poner(chunk, x0 + ancho / 2, suelo + y, z0, 0);
+
+            for (int x = 1; x < ancho - 1; x++)
+            {
+                for (int z = 1; z < fondo - 1; z++)
+                {
+                    for (int y = 1; y <= 3; y++)
+                        Poner(chunk, x0 + x, suelo + y, z0 + z, 0);
+                }
+            }
+
+            // Dos antorchas interiores.
+            Poner(chunk, x0 + 2, suelo + 2, z0 + 2, Antorcha);
+            Poner(chunk, x0 + ancho - 3, suelo + 2, z0 + 2, Antorcha);
+
+            // Los indígenas se crean después, desde SubsystemUpdate (hilo principal).
+            RefugiosPendientes.Enqueue(
+                new Point3(mundoX + ancho / 2, suelo + 1, mundoZ + fondo / 2));
         }
 
-        // Altura del primer bloque solido del suelo, ignorando arboles, hojas y plantas.
-        // Devuelve -1 si hay agua o hielo (no se construye ahi).
         private static int BuscarSuelo(TerrainChunk chunk, int x, int z)
         {
-            for (int y = TerrainChunk.Height - 2; y >= 2; y--)
+            for (int y = 220; y >= 2; y--)
             {
-                int contents = Terrain.ExtractContents(chunk.GetCellValueFast(x, y, z));
-                if (contents == 0) continue;
-                if (contents == WaterBlock.Index || contents == IceBlock.Index) return -1;
-                if (EsVegetacion(contents)) continue;
+                int contents = Terrain.ExtractContents(
+                    chunk.GetCellValueFast(x, y, z));
 
-                Block bloque = BlocksManager.Blocks[contents];
-                if (bloque == null || !bloque.IsCollidable) continue;
-                return y;
+                if (contents == 0 || contents == WaterBlock.Index)
+                    continue;
+
+                if (BlocksManager.Blocks[contents].IsCollidable)
+                    return y + 1;
             }
+
             return -1;
         }
 
-        private static bool EsVegetacion(int contents)
-        {
-            return contents == OakWoodBlock.Index || contents == BirchWoodBlock.Index
-                || contents == SpruceWoodBlock.Index || contents == OakLeavesBlock.Index
-                || contents == BirchLeavesBlock.Index || contents == SpruceLeavesBlock.Index;
-        }
-
-        private static void Poner(TerrainChunk chunk, int x, int y, int z, int contents)
-        {
-            PonerValor(chunk, x, y, z, Terrain.MakeBlockValue(contents));
-        }
-
-        private static void PonerValor(TerrainChunk chunk, int x, int y, int z, int valor)
+        private static void Poner(
+            TerrainChunk chunk, int x, int y, int z, int contents)
         {
             if (x < 0 || x >= TerrainChunk.Size ||
                 z < 0 || z >= TerrainChunk.Size ||
                 y < 1 || y >= TerrainChunk.Height)
-            {
                 return;
-            }
-            chunk.SetCellValueFast(x, y, z, valor);
+
+            chunk.SetCellValueFast(
+                x, y, z, Terrain.MakeBlockValue(contents));
         }
 
-        // ---------------- Indigenas (hilo principal) ----------------
         public override void OnProjectLoaded(Project project)
         {
-            creaturas = project.FindSubsystem<SubsystemCreatureSpawn>(true);
-            terreno = project.FindSubsystem<SubsystemTerrain>(true);
-            jugadores = project.FindSubsystem<SubsystemPlayers>(true);
-            tiempo = project.FindSubsystem<SubsystemTime>(true);
-            Refugio descartado;
-            while (RefugiosNuevos.TryDequeue(out descartado)) { }
-            pendientes.Clear();
-            poblados.Clear();
-            proximaRevision = 0;
+            subsystemCreatureSpawn =
+                project.FindSubsystem<SubsystemCreatureSpawn>(true);
+
+            RefugiosPendientes.Clear();
         }
 
         public override void OnProjectDisposed()
         {
-            creaturas = null; terreno = null; jugadores = null; tiempo = null;
-            Refugio descartado;
-            while (RefugiosNuevos.TryDequeue(out descartado)) { }
-            pendientes.Clear();
-            poblados.Clear();
+            subsystemCreatureSpawn = null;
+            RefugiosPendientes.Clear();
         }
 
         public override void SubsystemUpdate(float dt)
         {
-            if (creaturas == null || terreno == null || jugadores == null || tiempo == null) return;
+            if (subsystemCreatureSpawn == null || tipoRefugio == null)
+                return;
 
-            Refugio nuevo;
-            while (RefugiosNuevos.TryDequeue(out nuevo)) pendientes.Add(nuevo);
-            if (pendientes.Count == 0) return;
-
-            if (tiempo.GameTime < proximaRevision) return;
-            proximaRevision = tiempo.GameTime + 1.0;
-
-            // si el jugador se aleja volando muy rapido, no acumula refugios sin fin
-            if (pendientes.Count > 64) pendientes.RemoveRange(0, pendientes.Count - 64);
-
-            for (int i = pendientes.Count - 1; i >= 0; i--)
+            // Procesa como máximo dos refugios por frame.
+            for (int i = 0; i < 2; i++)
             {
-                Refugio refugio = pendientes[i];
-                long clave = ((long)refugio.X << 32) ^ (uint)refugio.Z;
-                if (poblados.Contains(clave))
-                {
-                    pendientes.RemoveAt(i);
-                    continue;
-                }
+                Point3 posicion;
 
-                Vector3 centro = new Vector3(refugio.X + Ancho / 2f, refugio.Suelo + 1f, refugio.Z + Fondo / 2f);
+                if (!RefugiosPendientes.TryDequeue(out posicion))
+                    break;
 
-                // solo cuando un jugador esta cerca (si no, los indigenas se perderian al descargarse)
-                ComponentPlayer jugador = jugadores.FindNearestPlayer(centro);
-                if (jugador == null || jugador.ComponentBody == null) continue;
-                if (Vector3.Distance(jugador.ComponentBody.Position, centro) > DistanciaActivacion) continue;
+                int cantidad = random.Next(5, 8);
 
-                // el chunk tiene que estar completamente cargado
-                TerrainChunk chunk = terreno.Terrain.GetChunkAtCell((int)centro.X, (int)centro.Z);
-                if (chunk == null || chunk.State < TerrainChunkState.Valid) continue;
-
-                poblados.Add(clave);
-                pendientes.RemoveAt(i);
-
-                // si ya hay indigenas aqui (mundo recargado o chunk regenerado), no se duplican
-                if (ContarIndigenasCerca(centro) >= 2) continue;
-
-                int cantidad = random.Next(IndigenasMin, IndigenasMax + 1);
-                for (int n = 0; n < cantidad; n++)
-                {
-                    Vector3 posicion = new Vector3(
-                        refugio.X + 1 + random.Next(Ancho - 2) + 0.5f,
-                        refugio.Suelo + 1.05f,
-                        refugio.Z + 1 + random.Next(Fondo - 2) + 0.5f);
-                    creaturas.SpawnCreature(PlantillaIndigena, posicion, false);
-                }
+                subsystemCreatureSpawn.SpawnCreatures(
+                    tipoRefugio, PlantillaIndigena, posicion, cantidad);
             }
-        }
-
-        private int ContarIndigenasCerca(Vector3 centro)
-        {
-            int total = 0;
-            foreach (ComponentCreature criatura in creaturas.Creatures)
-            {
-                if (criatura.ComponentBody == null) continue;
-                if (criatura.Entity.ValuesDictionary.DatabaseObject.Name != PlantillaIndigena) continue;
-                if (Vector3.Distance(criatura.ComponentBody.Position, centro) <= RadioComprobacion) total++;
-            }
-            return total;
         }
     }
 }
