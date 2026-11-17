@@ -14,7 +14,7 @@ namespace GiganteCode
     public class RefugioIndigenaSpawnLoader : ModLoader
     {
         // ---------------- Configuracion ----------------
-        private const float Frecuencia = 0.06f;               // probabilidad por chunk nuevo (~1 de cada 16 chunks)
+        private const float Frecuencia = 0.17f;               // probabilidad por chunk nuevo (~1 de cada 16 chunks)
         private const string PlantillaIndigena = "Indigena";  // Name de la plantilla del indigena normal en el .xdb
         private const int IndigenasMin = 3;
         private const int IndigenasMax = 5;
