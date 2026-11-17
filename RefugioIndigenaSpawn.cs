@@ -14,7 +14,9 @@ namespace GiganteCode
     public class RefugioIndigenaSpawnLoader : ModLoader
     {
         // ---------------- Configuracion ----------------
-        private const float Frecuencia = 0.17f;               // probabilidad por chunk nuevo (~1 de cada 16 chunks)
+        private const float Frecuencia = 0.06f;               // probabilidad por chunk nuevo (~1 de cada 16 chunks)
+        private const string PlantillaChaman = "Chaman";     // Name de la plantilla del chaman en el .xdb
+        private const float ProbabilidadChaman = 0.25f;      // probabilidad de que un refugio tenga un chaman
         private const string PlantillaIndigena = "Indigena";  // Name de la plantilla del indigena normal en el .xdb
         private const int IndigenasMin = 3;
         private const int IndigenasMax = 5;
@@ -58,7 +60,7 @@ namespace GiganteCode
 
         // ---------------- Generacion del refugio (hilo del terreno) ----------------
         // Hook del API 1.8 - 1.9: agrega un paso a la generacion de chunks (paso 4, orden 1500)
-        public void TerrainContentsGenerator24Initialize(
+        public override void TerrainContentsGenerator24Initialize(
             TerrainContentsGenerator24 generator,
             SubsystemTerrain subsystemTerrain)
         {
@@ -302,6 +304,13 @@ namespace GiganteCode
                         refugio.Suelo + 1.05f,
                         refugio.Z + 1 + random.Next(Fondo - 2) + 0.5f);
                     creaturas.SpawnCreature(PlantillaIndigena, posicion, false);
+                }
+
+                // a veces el refugio tiene un chaman en el centro
+                if (random.NextDouble() < ProbabilidadChaman)
+                {
+                    Vector3 posChaman = new Vector3(refugio.X + Ancho / 2f, refugio.Suelo + 1.05f, refugio.Z + Fondo / 2f);
+                    creaturas.SpawnCreature(PlantillaChaman, posChaman, false);
                 }
             }
         }

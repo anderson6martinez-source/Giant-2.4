@@ -39,16 +39,30 @@ namespace GiganteCode
         private const float IndKmhDia = 9f, IndKmhNoche = 14f;
 
         // ---- Instinto de manada ----
-        // Si atacan a uno, los de su grupo que esten cerca atacan al agresor:
+        // Si atacan a uno, los de su grupo que esten cerca atacan al agresor.
         //   grupo "esqueleto": los esqueletos entre si
         //   grupo "indigena":  zombis indigenas + gigante muerto (y mutante) se defienden mutuamente
+        //   los otros gigantes (pequeno, canibal, hielo, volador): sin manada
         private const float RadioManada = 25f;        // bloques a la redonda que oyen el grito
         private const float RangoDefensa = 40f;       // hasta donde persiguen al agresor
         private const float TiempoDefensa = 40f;      // segundos maximos de persecucion
         // Los indigenas salen a cazar a todos los gigantes menos al gigante muerto / mutante
+        private const bool IndigenasCazanGigantes = true;  // los indigenas cazan a los otros gigantes (no muerto/mutante)
+        private const bool OtrosGigantesSeDefienden = false; // los otros gigantes NO se ayudan ni entre su propia especie
         private const float RadioCazaGigantes = 25f;
         private const double PausaCaza = 1.0;         // cada cuanto buscan gigantes (segundos)
         private const string PrefijoGigantes = "Gigante";
+
+        // ---- Indigena normal (plantilla "Indigena" del .xdb) ----
+        // Vive en grupos, caza presas (jabalies, vacas...) con su lanza y se defiende solo con los suyos.
+        // Los depredadores lo ven como presa porque su categoria es LandOther.
+        private const string PlantillaNativo = "Indigena";
+        private const string PlantillaChaman = "Chaman"; // chaman: va en el grupo de los indigenas normales
+        private const float PesoNativo = 0.5f;
+        private const int GrupoNativoMin = 2;
+        private const int GrupoNativoMax = 4;
+        private const float RadioCazaPresas = 25f;
+        private const double PausaCazaPresas = 1.5;
 
         private const float LuzNoche = 0.3f;                     // SkyLightIntensity por debajo de esto = noche
 
@@ -67,10 +81,8 @@ namespace GiganteCode
         private double proximaRevision;
         private double proximaLimpieza;
         private double proximaCaza;
+        private double proximaCazaPresas;
         private readonly HashSet<Entity> suscritos = new HashSet<Entity>();
-        private readonly Dictionary<Entity, float> ultimaVida = new Dictionary<Entity, float>();
-        private readonly Dictionary<Entity, double> ultimoAviso = new Dictionary<Entity, double>();
-        private const float RadioAgresor = 12f;       // si no se sabe quien pego, se acusa al mas cercano dentro de este radio
 
         // valores originales (los de la plantilla) de cada criatura la primera vez que se la ve
         private readonly Dictionary<Entity, Base> bases = new Dictionary<Entity, Base>();
@@ -100,6 +112,9 @@ namespace GiganteCode
             // zombis indigenas: grupos pequenos
             AgregarTipo(subsystemCreatureSpawn, subsystemTerrain, creatureTypes, random,
                 PlantillaIndigena, PesoIndigena, GrupoIndigenaMin, GrupoIndigenaMax);
+            // indigenas normales: grupos de 2 a 4
+            AgregarTipo(subsystemCreatureSpawn, subsystemTerrain, creatureTypes, random,
+                PlantillaNativo, PesoNativo, GrupoNativoMin, GrupoNativoMax);
         }
 
         private static void AgregarTipo(
@@ -156,9 +171,8 @@ namespace GiganteCode
             proximaRevision = 0;
             proximaLimpieza = 0;
             proximaCaza = 0;
+            proximaCazaPresas = 0;
             suscritos.Clear();
-            ultimaVida.Clear();
-            ultimoAviso.Clear();
             bases.Clear();
             texturasOjos.Clear();
         }
@@ -167,8 +181,6 @@ namespace GiganteCode
         {
             proyecto = null; creaturas = null; cielo = null; tiempo = null;
             suscritos.Clear();
-            ultimaVida.Clear();
-            ultimoAviso.Clear();
             bases.Clear();
             texturasOjos.Clear();
         }
@@ -243,6 +255,7 @@ namespace GiganteCode
             }
 
             RevisarManadas();
+            CazarPresas();
 
             // limpieza de criaturas que ya no existen (cada ~10 s)
             if (tiempo.GameTime >= proximaLimpieza)
@@ -257,9 +270,6 @@ namespace GiganteCode
                 }
                 foreach (Entity e in viejas) bases.Remove(e);
                 suscritos.IntersectWith(vivas);
-                var otrasVidas = new List<Entity>();
-                foreach (Entity e in ultimaVida.Keys) { if (!vivas.Contains(e)) otrasVidas.Add(e); }
-                foreach (Entity e in otrasVidas) { ultimaVida.Remove(e); ultimoAviso.Remove(e); }
             }
         }
 
@@ -278,8 +288,15 @@ namespace GiganteCode
         private static string Grupo(ComponentCreature c)
         {
             string plantilla = NombrePlantilla(c);
+            // indigenas normales: se defienden solo entre ellos
+            if (plantilla == PlantillaNativo || plantilla == PlantillaChaman) return "nativo";
+            // esqueletos: se defienden solo entre ellos
             if (plantilla == PlantillaEsqueleto) return "esqueleto";
+            // gigantes zombis (muerto y mutante) + zombis indigenas: se defienden mutuamente
             if (EsZombiGigante(plantilla) || EsIndigena(plantilla, c.DisplayName)) return "indigena";
+            // los otros gigantes (pequeno, canibal, hielo, volador): no se defienden ni entre ellos
+            // (cambia OtrosGigantesSeDefienden a true si algun dia quieres que se ayuden)
+            if (OtrosGigantesSeDefienden && plantilla.StartsWith(PrefijoGigantes)) return "gigante";
             return null;
         }
 
@@ -298,29 +315,13 @@ namespace GiganteCode
 
                 suscritos.Add(criatura.Entity);
                 ComponentCreature victima = criatura;
-                criatura.ComponentHealth.Attacked += (ComponentCreature agresor) => AlSerAtacado(victima, agresor);
-            }
-
-            // 1b) respaldo: si a un miembro le baja la vida, avisa a la manada aunque el evento Attacked no se dispare
-            foreach (ComponentCreature miembro in creaturas.Creatures)
-            {
-                if (!EstaViva(miembro) || Grupo(miembro) == null) continue;
-
-                float actual = miembro.ComponentHealth.Health;
-                float anterior;
-                bool teniaAnterior = ultimaVida.TryGetValue(miembro.Entity, out anterior);
-                ultimaVida[miembro.Entity] = actual;
-                if (!teniaAnterior || actual >= anterior - 0.0005f) continue;
-
-                double antes;
-                if (ultimoAviso.TryGetValue(miembro.Entity, out antes) && tiempo.GameTime - antes < 1.0) continue;
-                ultimoAviso[miembro.Entity] = tiempo.GameTime;
-
-                ComponentCreature agresor = BuscarAgresor(miembro);
-                if (agresor != null) AlSerAtacado(miembro, agresor);
+                // OJO: en 2.4 ComponentHealth.Attacked ya no se dispara nunca. El evento real (el mismo que usan
+                // ChaseBehavior y HerdBehavior del juego) es ComponentHealth.Injured, que trae el Injury con el agresor.
+                criatura.ComponentHealth.Injured += (Injury lesion) => AlSerAtacado(victima, lesion.Attacker);
             }
 
             // 2) los indigenas buscan gigantes (todos menos el muerto y el mutante) y los atacan
+            if (!IndigenasCazanGigantes) return;
             if (tiempo.GameTime < proximaCaza) return;
             proximaCaza = tiempo.GameTime + PausaCaza;
 
@@ -355,29 +356,46 @@ namespace GiganteCode
             }
         }
 
-        // Quien le pego: primero lo que ya esta persiguiendo; si no, la criatura o jugador mas cercano que no sea de su grupo
-        private ComponentCreature BuscarAgresor(ComponentCreature victima)
+        // ---------- indigena normal: caza de presas ----------
+        private static bool EsPresa(ComponentCreature c)
         {
-            string grupo = Grupo(victima);
-            ComponentChaseBehavior persecucion = victima.Entity.FindComponent<ComponentChaseBehavior>();
-            if (persecucion != null && EstaViva(persecucion.Target) && Grupo(persecucion.Target) != grupo)
-            {
-                return persecucion.Target;
-            }
+            if (!EstaViva(c)) return false;
+            if (c.Entity.FindComponent<ComponentPlayer>() != null) return false;
+            if (c.Category != CreatureCategory.LandOther) return false;
+            string plantilla = NombrePlantilla(c);
+            if (plantilla.StartsWith(PrefijoGigantes) || plantilla == PlantillaEsqueleto || plantilla == PlantillaNativo || plantilla == PlantillaChaman) return false;
+            return !Contiene(plantilla, "zombi");
+        }
 
-            ComponentCreature masCercano = null;
-            float mejor = RadioAgresor;
-            foreach (ComponentCreature otro in creaturas.Creatures)
+        private void CazarPresas()
+        {
+            if (tiempo.GameTime < proximaCazaPresas) return;
+            proximaCazaPresas = tiempo.GameTime + PausaCazaPresas;
+
+            foreach (ComponentCreature nativo in creaturas.Creatures)
             {
-                if (otro == victima || !EstaViva(otro) || Grupo(otro) == grupo) continue;
-                float distancia = Vector3.Distance(victima.ComponentBody.Position, otro.ComponentBody.Position);
-                if (distancia < mejor)
+                if (!EstaViva(nativo) || NombrePlantilla(nativo) != PlantillaNativo) continue;
+                ComponentChaseBehavior persecucion = nativo.Entity.FindComponent<ComponentChaseBehavior>();
+                if (persecucion == null) continue;
+                if (persecucion.Target != null && EstaViva(persecucion.Target)) continue; // ya tiene objetivo
+
+                ComponentCreature masCercana = null;
+                float mejor = RadioCazaPresas;
+                foreach (ComponentCreature otra in creaturas.Creatures)
                 {
-                    mejor = distancia;
-                    masCercano = otro;
+                    if (!EsPresa(otra)) continue;
+                    float distancia = Vector3.Distance(nativo.ComponentBody.Position, otra.ComponentBody.Position);
+                    if (distancia < mejor)
+                    {
+                        mejor = distancia;
+                        masCercana = otra;
+                    }
+                }
+                if (masCercana != null)
+                {
+                    persecucion.Attack(masCercana, RangoDefensa, TiempoDefensa, false);
                 }
             }
-            return masCercano;
         }
 
         // alguien de la manada fue atacado: los de su grupo que esten cerca atacan al agresor
@@ -398,14 +416,13 @@ namespace GiganteCode
                 if (persecucion.Target != null && EstaViva(persecucion.Target)) continue; // ya esta peleando
 
                 persecucion.Attack(agresor, RangoDefensa, TiempoDefensa, true);
-                Log.Information("Manada: " + NombrePlantilla(aliado) + " defiende a " + NombrePlantilla(victima)
-                    + " contra " + NombrePlantilla(agresor));
             }
         }
 
         private static bool EsIndigena(string plantilla, string nombre)
         {
-            return Contiene(plantilla, TextoIndigena) || Contiene(nombre, TextoIndigena);
+            return (Contiene(plantilla, TextoIndigena) && Contiene(plantilla, "zombi"))
+                || (Contiene(nombre, TextoIndigena) && Contiene(nombre, "zombi"));
         }
 
         private static bool Contiene(string texto, string buscado)
