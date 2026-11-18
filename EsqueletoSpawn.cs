@@ -58,6 +58,7 @@ namespace GiganteCode
         // Los depredadores lo ven como presa porque su categoria es LandOther.
         private const string PlantillaNativo = "Indigena";
         private const string PlantillaChaman = "Chaman"; // chaman: va en el grupo de los indigenas normales
+        private const string PlantillaJefe = "JefeIndigena"; // jefe: 100 de vida, 5 de dano, tambien solo se defiende
         private const float PesoNativo = 0.5f;
         private const int GrupoNativoMin = 2;
         private const int GrupoNativoMax = 4;
@@ -321,7 +322,7 @@ namespace GiganteCode
         {
             string plantilla = NombrePlantilla(c);
             // indigenas normales: se defienden solo entre ellos
-            if (plantilla == PlantillaNativo || plantilla == PlantillaChaman) return "nativo";
+            if (plantilla == PlantillaNativo || plantilla == PlantillaChaman || plantilla == PlantillaJefe) return "nativo";
             // esqueletos: se defienden solo entre ellos
             if (plantilla == PlantillaEsqueleto) return "esqueleto";
             // gigantes zombis (muerto y mutante) + zombis indigenas: se defienden mutuamente
@@ -395,7 +396,7 @@ namespace GiganteCode
             if (c.Entity.FindComponent<ComponentPlayer>() != null) return false;
             if (c.Category != CreatureCategory.LandOther) return false;
             string plantilla = NombrePlantilla(c);
-            if (plantilla.StartsWith(PrefijoGigantes) || plantilla == PlantillaEsqueleto || plantilla == PlantillaNativo || plantilla == PlantillaChaman) return false;
+            if (plantilla.StartsWith(PrefijoGigantes) || plantilla == PlantillaEsqueleto || plantilla == PlantillaNativo || plantilla == PlantillaChaman || plantilla == PlantillaJefe) return false;
             return !Contiene(plantilla, "zombi");
         }
 
@@ -508,7 +509,7 @@ namespace GiganteCode
         {
             if (c == null) return false;
             string plantilla = c.Entity.ValuesDictionary.DatabaseObject.Name;
-            return plantilla == "Indigena" || plantilla == "Chaman";
+            return plantilla == "Indigena" || plantilla == "Chaman" || plantilla == "JefeIndigena";
         }
 
         public static bool EsJugador(ComponentCreature c)

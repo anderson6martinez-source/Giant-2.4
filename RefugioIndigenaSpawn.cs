@@ -17,12 +17,35 @@ namespace GiganteCode
         private const float Frecuencia = 0.06f;               // probabilidad por chunk nuevo (~1 de cada 16 chunks)
         private const string PlantillaChaman = "Chaman";     // Name de la plantilla del chaman en el .xdb
         private const float ProbabilidadChaman = 0.25f;      // probabilidad de que un refugio tenga un chaman
+        private const string PlantillaJefe = "JefeIndigena";  // Name de la plantilla del jefe en el .xdb
+        private const float ProbabilidadJefe = 0.15f;        // probabilidad de que un refugio tenga un jefe indigena
         private const string PlantillaIndigena = "Indigena";  // Name de la plantilla del indigena normal en el .xdb
         private const int IndigenasMin = 3;
         private const int IndigenasMax = 5;
         private const int MaxVariacionTerreno = 3;            // desnivel maximo permitido bajo el refugio
         private const float DistanciaActivacion = 60f;        // los indigenas aparecen cuando el jugador esta a menos de esto
         private const float RadioComprobacion = 20f;          // si ya hay indigenas a este radio, no se agregan mas
+
+        // ---- Cofre con botin ----
+        private const float ProbabilidadCofre = 0.5f;         // la mitad de los refugios tiene un cofre
+        private const int DireccionCofre = 0;                 // hacia donde mira el cofre (0 a 3); cambia si queda de espaldas
+        private const int IntentosMax = 5;                 // intentos de llenar el cofre si su inventario aun no existe
+
+        // Botin: nombre del bloque, minimo, maximo, probabilidad (0 a 1). Los nombres que no existan se ignoran.
+        private struct Botin
+        {
+            public string Nombre; public int Min; public int Max; public float Prob;
+            public Botin(string n, int min, int max, float p) { Nombre = n; Min = min; Max = max; Prob = p; }
+        }
+        private static readonly Botin[] TablaBotin =
+        {
+            new Botin("RawMeatBlock",       1, 3, 0.80f),  // carne (comun)
+            new Botin("LeatherBlock",       1, 3, 0.70f),  // cuero (comun)
+            new Botin("StringBlock",        1, 2, 0.50f),  // cuerda
+            new Botin("FeatherBlock",       1, 4, 0.40f),  // plumas (a veces)
+            new Botin("WoodenSpearBlock",   1, 1, 0.30f),  // lanza de madera (a veces)
+            new Botin("BaculoMagicoBlock",  1, 1, 0.10f),  // baculo magico (raro)
+        };
 
         // Posicion y tamano del refugio dentro del chunk (16x16): queda siempre dentro del chunk
         private const int X0 = 4;
@@ -35,6 +58,13 @@ namespace GiganteCode
             public int X;      // esquina del refugio (coordenadas del mundo)
             public int Z;
             public int Suelo;  // altura del bloque del piso
+            public bool ConCofre;
+        }
+
+        private struct CofrePendiente
+        {
+            public Point3 Posicion;
+            public int Intentos;
         }
 
         // Los chunks se generan en otro hilo: se guardan aqui y se procesan en el hilo principal
@@ -42,6 +72,7 @@ namespace GiganteCode
 
         private readonly List<Refugio> pendientes = new List<Refugio>();
         private readonly HashSet<long> poblados = new HashSet<long>();
+        private readonly List<CofrePendiente> cofresPendientes = new List<CofrePendiente>();
         private readonly System.Random random = new System.Random();
 
         private SubsystemCreatureSpawn creaturas;
@@ -190,7 +221,8 @@ namespace GiganteCode
             {
                 X = chunk.Origin.X + X0,
                 Z = chunk.Origin.Y + Z0,
-                Suelo = suelo
+                Suelo = suelo,
+                ConCofre = rng.NextDouble() < ProbabilidadCofre
             });
         }
 
@@ -246,6 +278,7 @@ namespace GiganteCode
             while (RefugiosNuevos.TryDequeue(out descartado)) { }
             pendientes.Clear();
             poblados.Clear();
+            cofresPendientes.Clear();
             proximaRevision = 0;
         }
 
@@ -256,11 +289,14 @@ namespace GiganteCode
             while (RefugiosNuevos.TryDequeue(out descartado)) { }
             pendientes.Clear();
             poblados.Clear();
+            cofresPendientes.Clear();
         }
 
         public override void SubsystemUpdate(float dt)
         {
             if (creaturas == null || terreno == null || jugadores == null || tiempo == null) return;
+
+            LlenarCofresPendientes();
 
             Refugio nuevo;
             while (RefugiosNuevos.TryDequeue(out nuevo)) pendientes.Add(nuevo);
@@ -299,6 +335,8 @@ namespace GiganteCode
                 // si ya hay indigenas aqui (mundo recargado o chunk regenerado), no se duplican
                 if (ContarIndigenasCerca(centro) >= 2) continue;
 
+                if (refugio.ConCofre) PonerCofre(refugio);
+
                 int cantidad = random.Next(IndigenasMin, IndigenasMax + 1);
                 for (int n = 0; n < cantidad; n++)
                 {
@@ -315,7 +353,88 @@ namespace GiganteCode
                     Vector3 posChaman = new Vector3(refugio.X + Ancho / 2f, refugio.Suelo + 1.05f, refugio.Z + Fondo / 2f);
                     creaturas.SpawnCreature(PlantillaChaman, posChaman, false);
                 }
+
+                // y, mas raro, un jefe indigena (cerca de la puerta del fondo)
+                if (random.NextDouble() < ProbabilidadJefe)
+                {
+                    Vector3 posJefe = new Vector3(refugio.X + Ancho / 2f + 1f, refugio.Suelo + 1.05f, refugio.Z + Fondo / 2f + 1f);
+                    creaturas.SpawnCreature(PlantillaJefe, posJefe, false);
+                }
             }
+        }
+
+        // ---------------- Cofre (hilo principal) ----------------
+        // Esquina opuesta a la mesa de crafteo. ChangeCell hace que el juego cree la entidad del cofre.
+        private void PonerCofre(Refugio refugio)
+        {
+            try
+            {
+                int x = refugio.X + Ancho - 2;
+                int y = refugio.Suelo + 1;
+                int z = refugio.Z + Fondo - 2;
+                if (Terrain.ExtractContents(terreno.Terrain.GetCellValueFast(x, y, z)) != 0) return; // ocupado
+
+                terreno.ChangeCell(x, y, z, Terrain.MakeBlockValue(ChestBlock.Index, 0, DireccionCofre));
+                if (!LlenarCofre(x, y, z))
+                    cofresPendientes.Add(new CofrePendiente { Posicion = new Point3(x, y, z), Intentos = 0 });
+            }
+            catch (Exception e)
+            {
+                Log.Warning("RefugioIndigena: no se pudo poner el cofre (" + e.Message + ")");
+            }
+        }
+
+        private void LlenarCofresPendientes()
+        {
+            for (int i = cofresPendientes.Count - 1; i >= 0; i--)
+            {
+                CofrePendiente c = cofresPendientes[i];
+                bool listo = false;
+                try { listo = LlenarCofre(c.Posicion.X, c.Posicion.Y, c.Posicion.Z); }
+                catch (Exception e) { Log.Warning("RefugioIndigena: error al llenar el cofre (" + e.Message + ")"); listo = true; }
+                c.Intentos++;
+                if (listo || c.Intentos >= IntentosMax) cofresPendientes.RemoveAt(i);
+                else cofresPendientes[i] = c;
+            }
+        }
+
+        // true si el cofre ya tiene su inventario (y quedo lleno); false si aun no existe
+        private bool LlenarCofre(int x, int y, int z)
+        {
+            SubsystemBlockEntities entidades = terreno.Project.FindSubsystem<SubsystemBlockEntities>(true);
+            ComponentBlockEntity bloque = entidades.GetBlockEntity(x, y, z);
+            if (bloque == null) return false;
+            ComponentChest cofre = bloque.Entity.FindComponent<ComponentChest>();
+            if (cofre == null) return false;
+
+            int puestos = 0;
+            foreach (Botin b in TablaBotin)
+            {
+                if (random.NextDouble() >= b.Prob) continue;
+                if (PonerEnCofre(cofre, b)) puestos++;
+            }
+            // nunca queda vacio: si no salio nada, al menos cuero
+            if (puestos == 0) PonerEnCofre(cofre, new Botin("LeatherBlock", 1, 2, 1f));
+            return true;
+        }
+
+        private bool PonerEnCofre(ComponentChest cofre, Botin b)
+        {
+            Block bloque = BlocksManager.FindBlockByTypeName(b.Nombre, false);
+            if (bloque == null) return false; // ese objeto no existe en esta version: se ignora
+
+            int cantidad = random.Next(b.Min, b.Max + 1);
+            int valor = Terrain.MakeBlockValue(bloque.BlockIndex, 0, 0);
+
+            // casilla vacia al azar
+            for (int intento = 0; intento < 20; intento++)
+            {
+                int casilla = random.Next(cofre.SlotsCount);
+                if (cofre.GetSlotCount(casilla) != 0) continue;
+                cofre.AddSlotItems(casilla, valor, cantidad);
+                return true;
+            }
+            return false;
         }
 
         private int ContarIndigenasCerca(Vector3 centro)
