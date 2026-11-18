@@ -19,7 +19,7 @@ namespace Game
     // ---------------------------------------------------------------
     public class BaculoMagicoBlock : Block
     {
-        public const int Index = 900; // CAMBIAR si ya esta ocupado
+        public const int Index = 200; // CAMBIAR si ya esta ocupado (debe ser el mismo numero que en Blocks.csv)
 
         public const int Corazones = 3;
         public const float SaludPorCorazon = 0.1f;
@@ -52,10 +52,31 @@ namespace Game
             IsCollidable = false;
         }
 
-        // Nunca se coloca como bloque (era lo que creaba el bloque invisible)
+        private static double s_proximoUso;
+
+        // Cura al que lo usa. La llaman el comportamiento (clic derecho) y, por si el comportamiento no
+        // esta registrado en el .xdb, tambien GetPlacementValue (el juego la llama al intentar "colocarlo").
+        public static void Curar(ComponentMiner componentMiner)
+        {
+            if (componentMiner == null || componentMiner.ComponentCreature == null) return;
+            ComponentHealth salud = componentMiner.ComponentCreature.ComponentHealth;
+            if (salud == null || salud.Health >= 1f) return;
+
+            SubsystemTime tiempo = componentMiner.Project.FindSubsystem<SubsystemTime>(true);
+            double ahora = tiempo.GameTime;
+            if (s_proximoUso > ahora + Recarga) s_proximoUso = 0; // mundo nuevo: el reloj se reinicio
+            if (ahora < s_proximoUso) return;
+
+            salud.Heal(Corazones * SaludPorCorazon);
+            s_proximoUso = ahora + Recarga;
+            componentMiner.DamageActiveTool(1); // gasta 1 de durabilidad (de 40)
+        }
+
+        // Nunca se coloca como bloque (era lo que creaba el bloque invisible): cura y no devuelve nada
         public override BlockPlacementData GetPlacementValue(SubsystemTerrain subsystemTerrain,
             ComponentMiner componentMiner, int value, TerrainRaycastResult raycastResult)
         {
+            Curar(componentMiner);
             return default(BlockPlacementData);
         }
 
@@ -99,35 +120,15 @@ namespace Game
 
     public class SubsystemBaculoMagicoBehavior : SubsystemBlockBehavior
     {
-        private SubsystemTime m_subsystemTime;
-        private double m_proximoUso;
-
         public override int[] HandledBlocks
         {
             get { return new int[] { BaculoMagicoBlock.Index }; }
         }
 
-        public override void Load(ValuesDictionary valuesDictionary)
-        {
-            base.Load(valuesDictionary);
-            m_subsystemTime = Project.FindSubsystem<SubsystemTime>(true);
-        }
-
         public override bool OnUse(Ray3 ray, ComponentMiner componentMiner)
         {
-            if (componentMiner == null || componentMiner.ComponentCreature == null)
-                return false;
-
-            // Siempre devuelve true: el uso queda "consumido" y el juego nunca intenta colocar un bloque.
-            ComponentHealth salud = componentMiner.ComponentCreature.ComponentHealth;
-            if (salud == null || salud.Health >= 1f)
-                return true; // vida llena: no gasta durabilidad
-            if (m_subsystemTime.GameTime < m_proximoUso)
-                return true;
-
-            salud.Heal(BaculoMagicoBlock.Corazones * BaculoMagicoBlock.SaludPorCorazon);
-            m_proximoUso = m_subsystemTime.GameTime + BaculoMagicoBlock.Recarga;
-            componentMiner.DamageActiveTool(1); // gasta 1 de durabilidad (de 40)
+            // Siempre true: el uso queda consumido y el juego nunca intenta colocar un bloque.
+            BaculoMagicoBlock.Curar(componentMiner);
             return true;
         }
     }
