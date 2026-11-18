@@ -1,7 +1,7 @@
 // Chaman indigena (plantilla "Chaman" del .xdb):
 //  - Maldicion: prende fuego SOLO a quien lo ataco a el o a los suyos (jugador, animal o gigante) por 3 segundos.
 //    Nunca maldice por iniciativa propia. Enfriamiento de 6 segundos.
-//  - Cura: cada 5 segundos recupera 3 puntos de vida a los indigenas normales a menos de 10 bloques,
+//  - Cura: cada 5 segundos recupera 3 puntos de vida a los indigenas normales y 5 puntos al jefe indigena a menos de 10 bloques,
 //    y sobre cada indigena curado sube un corazon (senal de que lo curo).
 // No aparece solo por el mundo: lo agrega RefugioIndigenaSpawn en algunos refugios (o sale de su huevo).
 // Archivo nuevo: sube este .cs junto a los demas; se compila todo junto en GiganteCode.dll.
@@ -17,6 +17,7 @@ namespace Game
     {
         const string PlantillaChaman = "Chaman";
         const string PlantillaNativo = "Indigena";
+        const string PlantillaJefe = "JefeIndigena";   // el chaman tambien cura al jefe
 
         const float AlcanceMaldicion = 14f;          // bloques
         const float DuracionFuego = 3f;              // segundos ardiendo
@@ -25,6 +26,7 @@ namespace Game
         const double PausaCura = 5.0;                // segundos entre curas
         const float RadioCura = 10f;                 // bloques
         const float VidaCura = 3f;                   // puntos de vida que recupera cada indigena
+        const float VidaCuraJefe = 5f;               // puntos de vida que recupera el jefe
 
         const double PausaRevision = 0.4;
 
@@ -72,6 +74,12 @@ namespace Game
         static string Plantilla(ComponentCreature c)
         {
             return c.Entity.ValuesDictionary.DatabaseObject.Name;
+        }
+
+        // el jefe se reconoce por su plantilla (exacta o cualquier nombre que contenga "Jefe")
+        static bool EsJefe(string plantilla)
+        {
+            return plantilla == PlantillaJefe || plantilla.IndexOf("Jefe", System.StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         public override void SubsystemUpdate(float dt)
@@ -136,7 +144,7 @@ namespace Game
             if (chaman.ComponentCreatureModel != null) chaman.ComponentCreatureModel.AttackOrder = true; // mueve los brazos
         }
 
-        // Cura a los indigenas normales heridos que tiene cerca
+        // Cura a los indigenas normales y al jefe heridos que tiene cerca
         void Curar(ComponentCreature chaman)
         {
             double ahora = tiempo.GameTime;
@@ -147,13 +155,15 @@ namespace Game
             foreach (ComponentCreature otro in creaturas.Creatures)
             {
                 if (otro == chaman || !EstaViva(otro)) continue;
-                if (Plantilla(otro) != PlantillaNativo) continue;
+                string plantillaOtro = Plantilla(otro);
+                bool esJefe = EsJefe(plantillaOtro);
+                if (plantillaOtro != PlantillaNativo && !esJefe) continue;
                 if (otro.ComponentHealth.Health >= 1f) continue;
                 if (Vector3.Distance(otro.ComponentBody.Position, chaman.ComponentBody.Position) > RadioCura) continue;
 
-                // la vida va de 0 a 1: 3 puntos = 3 / resistencia
+                // la vida va de 0 a 1: puntos / resistencia (indigena normal 3, jefe 5)
                 float resistencia = MathUtils.Max(1f, otro.ComponentHealth.AttackResilience);
-                otro.ComponentHealth.Heal(VidaCura / resistencia);
+                otro.ComponentHealth.Heal((esJefe ? VidaCuraJefe : VidaCura) / resistencia);
 
                 // corazon sobre la cabeza del indigena curado
                 if (particulas != null)
