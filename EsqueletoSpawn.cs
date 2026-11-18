@@ -65,11 +65,6 @@ namespace GiganteCode
         private const double PausaCazaPresas = 1.5;
         private const bool NativosCazan = false;     // false = el indigena NO sale a cazar por iniciativa (solo se defiende)
 
-        // ---- Garrote (bate) del indigena ----
-        // Los indigenas (normal y zombi) nacen con el garrote de madera en la mano (modelo con el garrote fijo).
-        // El esqueleto y el chaman NO lo llevan. Ningun indigena lanza nada (ver GiganteLanza.cs).
-        private const string ModeloGarrote = "Models/HumanoPequenoGarrote";
-
         private const float LuzNoche = 0.3f;                    // SkyLightIntensity por debajo de esto = noche
 
         // ---- Paz indigena ----
@@ -95,7 +90,6 @@ namespace GiganteCode
         private double proximaCazaPresas;
         private double proximaCalma;
         private readonly HashSet<Entity> suscritos = new HashSet<Entity>();
-        private readonly HashSet<Entity> conGarrote = new HashSet<Entity>();
 
         // valores originales (los de la plantilla) de cada criatura la primera vez que se la ve
         private readonly Dictionary<Entity, Base> bases = new Dictionary<Entity, Base>();
@@ -188,7 +182,6 @@ namespace GiganteCode
             proximaCalma = 0;
             PazIndigena.Limpiar();
             suscritos.Clear();
-            conGarrote.Clear();
             bases.Clear();
             texturasOjos.Clear();
         }
@@ -198,7 +191,6 @@ namespace GiganteCode
             proyecto = null; creaturas = null; cielo = null; tiempo = null;
             PazIndigena.Limpiar();
             suscritos.Clear();
-            conGarrote.Clear();
             bases.Clear();
             texturasOjos.Clear();
         }
@@ -273,7 +265,6 @@ namespace GiganteCode
                 }
             }
 
-            EquiparGarrotes();
             RevisarManadas();
             CazarPresas();
 
@@ -290,31 +281,7 @@ namespace GiganteCode
                 }
                 foreach (Entity e in viejas) bases.Remove(e);
                 suscritos.IntersectWith(vivas);
-                conGarrote.IntersectWith(vivas);
                 PazIndigena.LimpiarVencidas(tiempo.GameTime);
-            }
-        }
-
-        // ---------- garrote del indigena ----------
-        // Cada indigena (normal o zombi) recibe una sola vez el modelo con el garrote en la mano.
-        private void EquiparGarrotes()
-        {
-            foreach (ComponentCreature criatura in creaturas.Creatures)
-            {
-                if (conGarrote.Contains(criatura.Entity)) continue;
-                string plantilla = NombrePlantilla(criatura);
-                if (plantilla != PlantillaNativo && !EsIndigena(plantilla, criatura.DisplayName)) continue;
-
-                conGarrote.Add(criatura.Entity);
-                if (criatura.ComponentCreatureModel == null) continue;
-                try
-                {
-                    criatura.ComponentCreatureModel.Model = ContentManager.Get<Model>(ModeloGarrote);
-                }
-                catch (System.Exception e)
-                {
-                    Log.Warning("EsqueletoSpawn: falta " + ModeloGarrote + " (" + e.Message + ")");
-                }
             }
         }
 

@@ -50,6 +50,12 @@ namespace Game
             DefaultProjectilePower = 1f; // no es lanzable: solo cura (no tiene comportamiento de apuntar)
             MaxStacking = 1;
             IsCollidable = false;
+            DefaultCreativeData = 0; // sin esto el creativo puede no listar el bloque
+        }
+
+        public override string GetCategory(int value)
+        {
+            return "Tools";
         }
 
         private static double s_proximoUso;
@@ -102,7 +108,8 @@ namespace Game
 
         public override IEnumerable<int> GetCreativeValues()
         {
-            return new int[] { Terrain.MakeBlockValue(Index) };
+            // BlockIndex es el indice real que el juego le dio al bloque (no depende de la constante Index)
+            return new int[] { Terrain.MakeBlockValue(BlockIndex, 0, 0) };
         }
 
         public override void GenerateTerrainVertices(BlockGeometryGenerator generator,
