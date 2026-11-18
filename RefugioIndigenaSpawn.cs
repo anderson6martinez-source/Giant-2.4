@@ -8,7 +8,7 @@ using GameEntitySystem;
 namespace GiganteCode
 {
     /// <summary>
-    /// Genera refugios de madera dispersos por el mundo y los puebla con indigenas normales.
+    /// Genera refugios de madera dispersos por el mundo y los puebla con indigenas normales (y, a veces, chaman, jefe o cazador).
     /// Para API 1.8 - 1.9. No modifica la aparicion normal de los indigenas ni sus estadisticas.
     /// </summary>
     public class RefugioIndigenaSpawnLoader : ModLoader
@@ -19,6 +19,10 @@ namespace GiganteCode
         private const float ProbabilidadChaman = 0.25f;      // probabilidad de que un refugio tenga un chaman
         private const string PlantillaJefe = "JefeIndigena";  // Name de la plantilla del jefe en el .xdb
         private const float ProbabilidadJefe = 0.15f;        // probabilidad de que un refugio tenga un jefe indigena
+        private const string PlantillaCazador = "Cazador";  // Name de la plantilla del cazador en el .xdb
+        private const float ProbabilidadCazador = 0.35f;     // probabilidad de que un refugio tenga cazadores
+        private const int CazadoresMin = 1;                  // cuantos cazadores (entre min y max)
+        private const int CazadoresMax = 2;
         private const string PlantillaIndigena = "Indigena";  // Name de la plantilla del indigena normal en el .xdb
         private const int IndigenasMin = 3;
         private const int IndigenasMax = 5;
@@ -359,6 +363,17 @@ namespace GiganteCode
                 {
                     Vector3 posJefe = new Vector3(refugio.X + Ancho / 2f + 1f, refugio.Suelo + 1.05f, refugio.Z + Fondo / 2f + 1f);
                     creaturas.SpawnCreature(PlantillaJefe, posJefe, false);
+                }
+
+                // a veces hay 1 o 2 cazadores con lanza (cerca de la entrada, lejos de la mesa, el cofre y las antorchas)
+                if (random.NextDouble() < ProbabilidadCazador)
+                {
+                    int cazadores = random.Next(CazadoresMin, CazadoresMax + 1);
+                    for (int c = 0; c < cazadores; c++)
+                    {
+                        Vector3 posCazador = new Vector3(refugio.X + 3.5f + 2f * c, refugio.Suelo + 1.05f, refugio.Z + 2.5f);
+                        creaturas.SpawnCreature(PlantillaCazador, posCazador, false);
+                    }
                 }
             }
         }
