@@ -1,6 +1,7 @@
 // Barra de vida de Kik's Mod (reconstruida desde el IL de Kik'sMod.dll)
 using Engine;
 using Engine.Graphics;
+using Engine.Media;
 using GameEntitySystem;
 using TemplatesDatabase;
 
