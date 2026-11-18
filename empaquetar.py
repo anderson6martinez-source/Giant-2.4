@@ -1,22 +1,30 @@
-import io, sys, zipfile
+import glob, io, os, sys, zipfile
 
 # Uso: python3 empaquetar.py base.scmod codigo.dll salida.scmod
 # Los .scmod son: 49 bytes de cabecera + un zip con los bytes invertidos.
-base, dll, salida = sys.argv[1:4]
+# NUEVO: tambien mete todos los *.xdb que esten junto a este script (ej. HealthBar.xdb)
 
+base, dll, salida = sys.argv[1:4]
 datos = open(base, "rb").read()
 cabecera = datos[:49]
 origen = zipfile.ZipFile(io.BytesIO(datos[49:][::-1]))
 
+nuevos = {os.path.basename(dll.replace("\\", "/")): dll}
+aqui = os.path.dirname(os.path.abspath(__file__))
+for x in glob.glob(os.path.join(aqui, "*.xdb")):
+    nuevos[os.path.basename(x)] = x
+
 buf = io.BytesIO()
 with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
     for item in origen.infolist():
+        if item.filename in nuevos:   # se reemplaza por la version nueva
+            continue
         z.writestr(item, origen.read(item))
-    zi = zipfile.ZipInfo(dll.replace("\\", "/").split("/")[-1])
-    zi.compress_type = zipfile.ZIP_DEFLATED
-    zi.flag_bits |= 0x800
-    z.writestr(zi, open(dll, "rb").read())
-
+    for nombre, ruta in nuevos.items():
+        zi = zipfile.ZipInfo(nombre)
+        zi.compress_type = zipfile.ZIP_DEFLATED
+        zi.flag_bits |= 0x800
+        z.writestr(zi, open(ruta, "rb").read())
 open(salida, "wb").write(cabecera + buf.getvalue()[::-1])
 
 # Comprobacion
