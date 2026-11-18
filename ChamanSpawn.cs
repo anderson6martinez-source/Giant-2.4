@@ -20,8 +20,8 @@ namespace Game
         const string PlantillaJefe = "JefeIndigena";   // el chaman tambien cura al jefe
 
         const float AlcanceMaldicion = 14f;          // bloques
-        const float DuracionFuego = 3f;              // segundos ardiendo
-        const double EnfriamientoMaldicion = 6.0;    // segundos entre maldiciones
+        const float DuracionFuego = 5f;              // segundos ardiendo
+        const double EnfriamientoMaldicion = 10.0;    // segundos entre maldiciones
 
         const double PausaCura = 5.0;                // segundos entre curas
         const float RadioCura = 10f;                 // bloques
