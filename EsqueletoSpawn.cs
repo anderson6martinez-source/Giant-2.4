@@ -250,6 +250,11 @@ namespace GiganteCode
                     nuevaVelocidad = (noche ? IndKmhNoche : IndKmhDia) * KmhAMs;
                 }
 
+                // campeones (ver Campeones.cs): sus factores se aplican aqui porque este bloque recalcula las estadisticas
+                nuevaVida *= CampeonesLoader.FactorVida(criatura.Entity);
+                nuevoDano *= CampeonesLoader.FactorDano(criatura.Entity);
+                nuevaVelocidad *= CampeonesLoader.FactorVelocidad(criatura.Entity);
+
                 vida.AttackResilience = nuevaVida;
                 mano.AttackPower = nuevoDano;
                 movimiento.WalkSpeed = nuevaVelocidad;
