@@ -9,7 +9,7 @@ namespace Game
 {
     // ---------------------------------------------------------------
     // PALO EN FUEGO
-    //  - Receta: un palo + una fogata.
+    //  - Receta: una fogata + un palo, uno junto al otro (sobra la fogata).
     //  - Durabilidad 7; mientras lo tienes en la mano gasta 1 punto por segundo.
     //  - Clic normal (el de golpear/picar, el que se usa en el movil): prende el bloque
     //    inflamable al que apuntas o al animal.
@@ -21,7 +21,7 @@ namespace Game
     //
     // Hay que registrar en Blocks.csv (igual que BaculoMagico):
     //   PaloEnFuegoBlock  -> Index 700
-    //   PaloLuzBlock      -> Index 202
+    //   PaloLuzBlock      -> Index 702
     // y registrar SubsystemPaloEnFuegoBehavior en el .xdb igual que
     // SubsystemBaculoMagicoBehavior.
     // ---------------------------------------------------------------
@@ -244,7 +244,10 @@ namespace Game
             valuesDictionary.SetValue("LucesPendientes", string.Join(";", lista.ToArray()));
         }
 
-        // Receta: palo + fogata (uno sobre el otro, o al lado, el juego las gira).
+        // Receta: fogata a la izquierda y palo a su derecha (casillas 1 y 2 de la fila de arriba).
+        // El juego no gira ni desplaza las recetas agregadas por codigo, asi que se agregan
+        // todas las posiciones (3x3) y tambien en espejo (palo a la izquierda, fogata a la derecha).
+        // Al fabricar, la fogata sobra y vuelve a la casilla de sobrantes.
         private void AgregarReceta()
         {
             int resultado = Terrain.MakeBlockValue(PaloEnFuegoBlock.Index, 0, 0);
@@ -256,17 +259,26 @@ namespace Game
             Block palo = BlocksManager.FindBlockByTypeName("StickBlock", true);
             Block fogata = BlocksManager.FindBlockByTypeName("CampfireBlock", true);
 
-            CraftingRecipe receta = new CraftingRecipe();
-            receta.ResultValue = resultado;
-            receta.ResultCount = 1;
-            receta.RemainsValue = Terrain.MakeBlockValue(fogata.BlockIndex, 0, 0); // la fogata sobra
-            receta.RemainsCount = 1;
-            receta.RequiredHeatLevel = 0f;
-            receta.Description = "Palo en fuego";
-            receta.Ingredients = new string[9];
-            receta.Ingredients[0] = fogata.CraftingId;
-            receta.Ingredients[3] = palo.CraftingId;
-            CraftingRecipesManager.Recipes.Add(receta);
+            for (int espejo = 0; espejo < 2; espejo++)
+            {
+                for (int fila = 0; fila < 3; fila++)
+                {
+                    for (int col = 0; col < 2; col++)
+                    {
+                        CraftingRecipe receta = new CraftingRecipe();
+                        receta.ResultValue = resultado;
+                        receta.ResultCount = 1;
+                        receta.RemainsValue = Terrain.MakeBlockValue(fogata.BlockIndex, 0, 0); // sobra una fogata
+                        receta.RemainsCount = 1;
+                        receta.RequiredHeatLevel = 0f;
+                        receta.Description = "Palo en fuego";
+                        receta.Ingredients = new string[9];
+                        receta.Ingredients[fila * 3 + col + (espejo == 0 ? 0 : 1)] = fogata.CraftingId;
+                        receta.Ingredients[fila * 3 + col + (espejo == 0 ? 1 : 0)] = palo.CraftingId;
+                        CraftingRecipesManager.Recipes.Add(receta);
+                    }
+                }
+            }
         }
 
         public void Update(float dt)
