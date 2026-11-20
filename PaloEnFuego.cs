@@ -198,11 +198,6 @@ namespace Game
         private Dictionary<ComponentPlayer, EstadoJugador> m_estados = new Dictionary<ComponentPlayer, EstadoJugador>();
         private List<Point3> m_luzPendiente = new List<Point3>();
 
-        public int UpdateOrder
-        {
-            get { return 0; }
-        }
-
         public override int[] HandledBlocks
         {
             get { return new int[] { PaloEnFuegoBlock.Index, PaloLuzBlock.Index }; }
