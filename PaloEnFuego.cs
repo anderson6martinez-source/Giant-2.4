@@ -155,7 +155,7 @@ namespace Game
     // sostiene el palo en fuego y se quita cuando lo suelta o se mueve.
     public class PaloLuzBlock : Block
     {
-        public const int Index = 202; // CAMBIAR si ya esta ocupado (igual que en Blocks.csv)
+        public const int Index = 702; // CAMBIAR si ya esta ocupado (igual que en Blocks.csv)
 
         public PaloLuzBlock()
         {
