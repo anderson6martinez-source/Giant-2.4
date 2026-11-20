@@ -20,14 +20,14 @@ namespace Game
     //   Textures/Items/PaloEnFuego.png
     //
     // Hay que registrar en Blocks.csv (igual que BaculoMagico):
-    //   PaloEnFuegoBlock  -> Index 201
+    //   PaloEnFuegoBlock  -> Index 700
     //   PaloLuzBlock      -> Index 202
     // y registrar SubsystemPaloEnFuegoBehavior en el .xdb igual que
     // SubsystemBaculoMagicoBehavior.
     // ---------------------------------------------------------------
     public class PaloEnFuegoBlock : Block
     {
-        public const int Index = 201; // CAMBIAR si ya esta ocupado (igual que en Blocks.csv)
+        public const int Index = 700; // CAMBIAR si ya esta ocupado (igual que en Blocks.csv)
 
         public const int Durabilidad = 7;            // puntos de durabilidad
         public const float SegundosPorPunto = 1f;    // 1 punto por segundo en la mano
