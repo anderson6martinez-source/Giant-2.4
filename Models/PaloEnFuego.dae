@@ -1,0 +1,101 @@
+<?xml version='1.0' encoding='utf-8'?>
+<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+  <asset>
+    <contributor><author>Survivalcraft Moder</author><authoring_tool>Engine 0.0.0</authoring_tool></contributor>
+    <up_axis>Y_UP</up_axis>
+    <title>PaloEnFuego</title>
+  </asset>
+  <library_images />
+  <library_effects />
+  <library_materials />
+<library_geometries>
+<geometry id="Palo-mesh" name="Palo">
+      <mesh>
+        <source id="Palo-mesh-positions">
+          <float_array id="Palo-mesh-positions-array" count="24">-0.04 -0.4 -0.04 -0.04 -0.4 0.04 -0.04 0.22 -0.04 -0.04 0.22 0.04 0.04 -0.4 -0.04 0.04 -0.4 0.04 0.04 0.22 -0.04 0.04 0.22 0.04</float_array>
+          <technique_common><accessor source="#Palo-mesh-positions-array" count="8" stride="3"><param name="X" type="float" /><param name="Y" type="float" /><param name="Z" type="float" /></accessor></technique_common>
+        </source>
+        <source id="Palo-mesh-normals">
+          <float_array id="Palo-mesh-normals-array" count="108">1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1</float_array>
+          <technique_common><accessor source="#Palo-mesh-normals-array" count="36" stride="3"><param name="X" type="float" /><param name="Y" type="float" /><param name="Z" type="float" /></accessor></technique_common>
+        </source>
+        <source id="Palo-mesh-map">
+          <float_array id="Palo-mesh-map-array" count="72">0.02 0.02 0.48 0.02 0.48 0.98 0.02 0.02 0.48 0.98 0.02 0.98 0.02 0.02 0.48 0.02 0.48 0.98 0.02 0.02 0.48 0.98 0.02 0.98 0.02 0.02 0.48 0.02 0.48 0.98 0.02 0.02 0.48 0.98 0.02 0.98 0.02 0.02 0.48 0.02 0.48 0.98 0.02 0.02 0.48 0.98 0.02 0.98 0.02 0.02 0.48 0.02 0.48 0.98 0.02 0.02 0.48 0.98 0.02 0.98 0.02 0.02 0.48 0.02 0.48 0.98 0.02 0.02 0.48 0.98 0.02 0.98</float_array>
+          <technique_common><accessor source="#Palo-mesh-map-array" count="36" stride="2"><param name="S" type="float" /><param name="T" type="float" /></accessor></technique_common>
+        </source>
+        <vertices id="Palo-mesh-vertices"><input semantic="POSITION" source="#Palo-mesh-positions" /></vertices>
+        <triangles count="12">
+          <input semantic="VERTEX" source="#Palo-mesh-vertices" offset="0" />
+          <input semantic="NORMAL" source="#Palo-mesh-normals" offset="1" />
+          <input semantic="TEXCOORD" source="#Palo-mesh-map" offset="2" />
+          <p>1 0 0 5 1 1 7 2 2 1 3 3 7 4 4 3 5 5 0 6 6 2 7 7 6 8 8 0 9 9 6 10 10 4 11 11 2 12 12 3 13 13 7 14 14 2 15 15 7 16 16 6 17 17 0 18 18 4 19 19 5 20 20 0 21 21 5 22 22 1 23 23 4 24 24 6 25 25 7 26 26 4 27 27 7 28 28 5 29 29 0 30 30 1 31 31 3 32 32 0 33 33 3 34 34 2 35 35</p>
+        </triangles>
+      </mesh>
+    </geometry>
+<geometry id="Brasa-mesh" name="Brasa">
+      <mesh>
+        <source id="Brasa-mesh-positions">
+          <float_array id="Brasa-mesh-positions-array" count="24">-0.06 0.2 -0.06 -0.06 0.2 0.06 -0.06 0.36 -0.06 -0.06 0.36 0.06 0.06 0.2 -0.06 0.06 0.2 0.06 0.06 0.36 -0.06 0.06 0.36 0.06</float_array>
+          <technique_common><accessor source="#Brasa-mesh-positions-array" count="8" stride="3"><param name="X" type="float" /><param name="Y" type="float" /><param name="Z" type="float" /></accessor></technique_common>
+        </source>
+        <source id="Brasa-mesh-normals">
+          <float_array id="Brasa-mesh-normals-array" count="108">1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1</float_array>
+          <technique_common><accessor source="#Brasa-mesh-normals-array" count="36" stride="3"><param name="X" type="float" /><param name="Y" type="float" /><param name="Z" type="float" /></accessor></technique_common>
+        </source>
+        <source id="Brasa-mesh-map">
+          <float_array id="Brasa-mesh-map-array" count="72">0.52 0.02 0.72 0.02 0.72 0.98 0.52 0.02 0.72 0.98 0.52 0.98 0.52 0.02 0.72 0.02 0.72 0.98 0.52 0.02 0.72 0.98 0.52 0.98 0.52 0.02 0.72 0.02 0.72 0.98 0.52 0.02 0.72 0.98 0.52 0.98 0.52 0.02 0.72 0.02 0.72 0.98 0.52 0.02 0.72 0.98 0.52 0.98 0.52 0.02 0.72 0.02 0.72 0.98 0.52 0.02 0.72 0.98 0.52 0.98 0.52 0.02 0.72 0.02 0.72 0.98 0.52 0.02 0.72 0.98 0.52 0.98</float_array>
+          <technique_common><accessor source="#Brasa-mesh-map-array" count="36" stride="2"><param name="S" type="float" /><param name="T" type="float" /></accessor></technique_common>
+        </source>
+        <vertices id="Brasa-mesh-vertices"><input semantic="POSITION" source="#Brasa-mesh-positions" /></vertices>
+        <triangles count="12">
+          <input semantic="VERTEX" source="#Brasa-mesh-vertices" offset="0" />
+          <input semantic="NORMAL" source="#Brasa-mesh-normals" offset="1" />
+          <input semantic="TEXCOORD" source="#Brasa-mesh-map" offset="2" />
+          <p>1 0 0 5 1 1 7 2 2 1 3 3 7 4 4 3 5 5 0 6 6 2 7 7 6 8 8 0 9 9 6 10 10 4 11 11 2 12 12 3 13 13 7 14 14 2 15 15 7 16 16 6 17 17 0 18 18 4 19 19 5 20 20 0 21 21 5 22 22 1 23 23 4 24 24 6 25 25 7 26 26 4 27 27 7 28 28 5 29 29 0 30 30 1 31 31 3 32 32 0 33 33 3 34 34 2 35 35</p>
+        </triangles>
+      </mesh>
+    </geometry>
+<geometry id="Llama-mesh" name="Llama">
+      <mesh>
+        <source id="Llama-mesh-positions">
+          <float_array id="Llama-mesh-positions-array" count="24">-0.035 0.34 -0.035 -0.035 0.34 0.035 -0.035 0.46 -0.035 -0.035 0.46 0.035 0.035 0.34 -0.035 0.035 0.34 0.035 0.035 0.46 -0.035 0.035 0.46 0.035</float_array>
+          <technique_common><accessor source="#Llama-mesh-positions-array" count="8" stride="3"><param name="X" type="float" /><param name="Y" type="float" /><param name="Z" type="float" /></accessor></technique_common>
+        </source>
+        <source id="Llama-mesh-normals">
+          <float_array id="Llama-mesh-normals-array" count="108">1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1</float_array>
+          <technique_common><accessor source="#Llama-mesh-normals-array" count="36" stride="3"><param name="X" type="float" /><param name="Y" type="float" /><param name="Z" type="float" /></accessor></technique_common>
+        </source>
+        <source id="Llama-mesh-map">
+          <float_array id="Llama-mesh-map-array" count="72">0.77 0.02 0.98 0.02 0.98 0.98 0.77 0.02 0.98 0.98 0.77 0.98 0.77 0.02 0.98 0.02 0.98 0.98 0.77 0.02 0.98 0.98 0.77 0.98 0.77 0.02 0.98 0.02 0.98 0.98 0.77 0.02 0.98 0.98 0.77 0.98 0.77 0.02 0.98 0.02 0.98 0.98 0.77 0.02 0.98 0.98 0.77 0.98 0.77 0.02 0.98 0.02 0.98 0.98 0.77 0.02 0.98 0.98 0.77 0.98 0.77 0.02 0.98 0.02 0.98 0.98 0.77 0.02 0.98 0.98 0.77 0.98</float_array>
+          <technique_common><accessor source="#Llama-mesh-map-array" count="36" stride="2"><param name="S" type="float" /><param name="T" type="float" /></accessor></technique_common>
+        </source>
+        <vertices id="Llama-mesh-vertices"><input semantic="POSITION" source="#Llama-mesh-positions" /></vertices>
+        <triangles count="12">
+          <input semantic="VERTEX" source="#Llama-mesh-vertices" offset="0" />
+          <input semantic="NORMAL" source="#Llama-mesh-normals" offset="1" />
+          <input semantic="TEXCOORD" source="#Llama-mesh-map" offset="2" />
+          <p>1 0 0 5 1 1 7 2 2 1 3 3 7 4 4 3 5 5 0 6 6 2 7 7 6 8 8 0 9 9 6 10 10 4 11 11 2 12 12 3 13 13 7 14 14 2 15 15 7 16 16 6 17 17 0 18 18 4 19 19 5 20 20 0 21 21 5 22 22 1 23 23 4 24 24 6 25 25 7 26 26 4 27 27 7 28 28 5 29 29 0 30 30 1 31 31 3 32 32 0 33 33 3 34 34 2 35 35</p>
+        </triangles>
+      </mesh>
+    </geometry>
+</library_geometries>
+  <library_visual_scenes>
+    <visual_scene id="Scene" name="Scene">
+      <node id="Palo" name="Palo" type="NODE">
+        <matrix sid="transform">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>
+        <instance_geometry url="#Palo-mesh" name="Palo" />
+      </node>
+      <node id="Brasa" name="Brasa" type="NODE">
+        <matrix sid="transform">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>
+        <instance_geometry url="#Brasa-mesh" name="Brasa" />
+      </node>
+      <node id="Llama" name="Llama" type="NODE">
+        <matrix sid="transform">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>
+        <instance_geometry url="#Llama-mesh" name="Llama" />
+      </node>
+    </visual_scene>
+  </library_visual_scenes>
+  <scene>
+    <instance_visual_scene url="#Scene" />
+  </scene>
+</COLLADA>
