@@ -9,7 +9,7 @@ namespace Game
 {
     // ---------------------------------------------------------------
     // PALO EN FUEGO
-    //  - Receta: una fogata + un palo, uno junto al otro (sobra la fogata).
+    //  - Receta: una fogata + un palo, uno junto al otro (sobra la fogata). Esta en RecetaPaloEnFuego.cr
     //  - Durabilidad 7; mientras lo tienes en la mano gasta 1 punto por segundo.
     //  - Clic normal (el de golpear/picar, el que se usa en el movil): prende el bloque
     //    inflamable al que apuntas o al animal.
@@ -229,7 +229,6 @@ namespace Game
                 }
             }
 
-            AgregarReceta();
         }
 
         public override void Save(ValuesDictionary valuesDictionary)
@@ -242,43 +241,6 @@ namespace Game
                 if (e.TieneLuz) lista.Add(e.CeldaLuz.X + "," + e.CeldaLuz.Y + "," + e.CeldaLuz.Z);
             }
             valuesDictionary.SetValue("LucesPendientes", string.Join(";", lista.ToArray()));
-        }
-
-        // Receta: fogata a la izquierda y palo a su derecha (casillas 1 y 2 de la fila de arriba).
-        // El juego no gira ni desplaza las recetas agregadas por codigo, asi que se agregan
-        // todas las posiciones (3x3) y tambien en espejo (palo a la izquierda, fogata a la derecha).
-        // Al fabricar, la fogata sobra y vuelve a la casilla de sobrantes.
-        private void AgregarReceta()
-        {
-            int resultado = Terrain.MakeBlockValue(PaloEnFuegoBlock.Index, 0, 0);
-            foreach (CraftingRecipe r in CraftingRecipesManager.Recipes)
-            {
-                if (r.ResultValue == resultado) return; // ya existe
-            }
-
-            Block palo = BlocksManager.FindBlockByTypeName("StickBlock", true);
-            Block fogata = BlocksManager.FindBlockByTypeName("CampfireBlock", true);
-
-            for (int espejo = 0; espejo < 2; espejo++)
-            {
-                for (int fila = 0; fila < 3; fila++)
-                {
-                    for (int col = 0; col < 2; col++)
-                    {
-                        CraftingRecipe receta = new CraftingRecipe();
-                        receta.ResultValue = resultado;
-                        receta.ResultCount = 1;
-                        receta.RemainsValue = Terrain.MakeBlockValue(fogata.BlockIndex, 0, 0); // sobra una fogata
-                        receta.RemainsCount = 1;
-                        receta.RequiredHeatLevel = 0f;
-                        receta.Description = "Palo en fuego";
-                        receta.Ingredients = new string[9];
-                        receta.Ingredients[fila * 3 + col + (espejo == 0 ? 0 : 1)] = fogata.CraftingId;
-                        receta.Ingredients[fila * 3 + col + (espejo == 0 ? 1 : 0)] = palo.CraftingId;
-                        CraftingRecipesManager.Recipes.Add(receta);
-                    }
-                }
-            }
         }
 
         public void Update(float dt)
