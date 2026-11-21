@@ -37,7 +37,7 @@ namespace Game
         float m_velocidadBase;
         double m_proximaInvocacion;
         List<ComponentCreature> m_secuaces = new List<ComponentCreature>();
-        Engine.Random m_random = new Engine.Random();
+        System.Random m_random = new System.Random();
 
         public int UpdateOrder { get { return 0; } }
 

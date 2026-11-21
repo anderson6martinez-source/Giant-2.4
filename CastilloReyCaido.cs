@@ -68,7 +68,7 @@ namespace Game
         bool CentroDeCelda(Point2 celda, out Point2 centro)
         {
             centro = Point2.Zero;
-            Engine.Random r = new Engine.Random(m_seed ^ (celda.X * 73856093) ^ (celda.Y * 19349663));
+            System.Random r = new System.Random(m_seed ^ (celda.X * 73856093) ^ (celda.Y * 19349663));
             if (r.UniformFloat(0f, 1f) > PROBABILIDAD) return false;
             centro = new Point2(
                 celda.X * CELDA + r.UniformInt(150, CELDA - 150),
@@ -202,7 +202,7 @@ namespace Game
             Spawn(PLANTILLA_BOSS, new Vector3(c.X + 0.5f, baseY + 1.5f, c.Y + 0.5f));
 
             // 8) guardias en el patio
-            Engine.Random r = new Engine.Random(m_seed ^ c.X ^ c.Y);
+            System.Random r = new System.Random(m_seed ^ c.X ^ c.Y);
             int n = r.UniformInt(4, 6);
             for (int i = 0; i < n; i++)
             {
