@@ -231,7 +231,7 @@ namespace Game
                 entidad.FindComponent<ComponentBlockEntity>(true).Coordinates = new Point3(x, y, z);
                 ComponentChest cofre = entidad.FindComponent<ComponentChest>(true);
                 // ajusta los items a tu gusto: (slot, valorBloque, cantidad)
-                cofre.AddSlotItems(0, Terrain.MakeBlockValue(BoneBlock.Index), 15);
+                cofre.AddSlotItems(0, Terrain.MakeBlockValue(RottenMeatBlock.Index), 8);
                 cofre.AddSlotItems(1, Terrain.MakeBlockValue(DiamondChunkBlock.Index), 2);
                 Project.AddEntity(entidad);
             }
