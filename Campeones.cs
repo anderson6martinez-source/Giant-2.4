@@ -60,6 +60,15 @@ namespace GiganteCode
         // tipo de campeon de cada criatura viva (lo leen los otros archivos para sus factores)
         static readonly Dictionary<Entity, int> tipos = new Dictionary<Entity, int>();
 
+        // -1 = no es campeon; 0 rojo, 1 amarillo, 2 verde, 3 azul, 4 morado, 5 dorado
+        // (lo lee el panel de vida de HealthBars por reflexion, para mostrar el color del campeon)
+        public static int TipoCampeon(Entity e)
+        {
+            int t;
+            if (e == null || !tipos.TryGetValue(e, out t)) return -1;
+            return t;
+        }
+
         public static float FactorVida(Entity e)
         {
             int t;
