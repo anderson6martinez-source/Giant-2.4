@@ -66,7 +66,7 @@ namespace Game
         bool CentroDeCelda(Point2 celda, out Point2 centro)
         {
             centro = Point2.Zero;
-            Random r = new Random(m_seed ^ (celda.X * 73856093) ^ (celda.Y * 19349663));
+            Engine.Random r = new Engine.Random(m_seed ^ (celda.X * 73856093) ^ (celda.Y * 19349663));
             if (r.UniformFloat(0f, 1f) > PROBABILIDAD) return false;
             centro = new Point2(
                 celda.X * CELDA + r.UniformInt(150, CELDA - 150),
@@ -122,7 +122,7 @@ namespace Game
 
         // Pone un bloque de muro con probabilidad que baja con la altura:
         // abajo casi siempre hay muro, arriba casi todo esta derrumbado.
-        void Muro(Random r, int x, int baseY, int z, int altoMax, float integridad)
+        void Muro(Engine.Random r, int x, int baseY, int z, int altoMax, float integridad)
         {
             for (int y = 1; y <= altoMax; y++)
             {
@@ -133,7 +133,7 @@ namespace Game
 
         void Construir(Point2 c)
         {
-            Random r = new Random(m_seed ^ c.X ^ (c.Y * 31));
+            Engine.Random r = new Engine.Random(m_seed ^ c.X ^ (c.Y * 31));
             int mitad = TAM / 2;
             int x0 = c.X - mitad, z0 = c.Y - mitad;
             int x1 = c.X + mitad, z1 = c.Y + mitad;

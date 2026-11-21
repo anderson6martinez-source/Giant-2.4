@@ -33,7 +33,7 @@ namespace Game
         bool m_muerto;
         double m_proximaOleada;
         List<ComponentCreature> m_esqueletos = new List<ComponentCreature>();
-        Random m_random = new Random();
+        Engine.Random m_random = new Engine.Random();
 
         public int UpdateOrder { get { return 0; } }
 
