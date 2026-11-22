@@ -32,7 +32,7 @@ namespace GiganteCode
         private const int IndigenasMin = 5;
         private const int IndigenasMax = 8;
 
-        private const bool ConPuertas = false;            // false = chozas cerradas, sin hueco de puerta; true = con puerta
+        private const bool ConEntradas = true;            // true = cada choza tiene una entrada (hueco de 1x2, sin puerta); false = chozas cerradas
         private const int MaxVariacionTerreno = 3;            // desnivel maximo permitido bajo la aldea
         private const float DistanciaActivacion = 60f;        // la gente aparece cuando el jugador esta a menos de esto
         private const float RadioComprobacion = 20f;          // si ya hay indigenas a este radio, no se agregan mas
@@ -90,18 +90,18 @@ namespace GiganteCode
 
         public override void __ModInitialize()
         {
-            ModsManager.RegisterHook("TerrainContentsGenerator23Initialize", this);
+            ModsManager.RegisterHook("TerrainContentsGenerator24Initialize", this);
             ModsManager.RegisterHook("OnProjectLoaded", this);
             ModsManager.RegisterHook("OnProjectDisposed", this);
             ModsManager.RegisterHook("SubsystemUpdate", this);
         }
 
         // ---------------- Generacion (hilo del terreno) ----------------
-        public override void TerrainContentsGenerator23Initialize(
+        public override void TerrainContentsGenerator24Initialize(
             ITerrainContentsGenerator generator,
             SubsystemTerrain subsystemTerrain)
         {
-            TerrainContentsGenerator23 generador = generator as TerrainContentsGenerator23;
+            TerrainContentsGenerator24 generador = generator as TerrainContentsGenerator24;
             if (generador == null) return;
             generador.ChunkGenerationStep4.Add(
                 new ChunkGenerationStep(1510, chunk => GenerarEnChunkSeguro(chunk)));
@@ -209,7 +209,7 @@ namespace GiganteCode
             return (izq || der) && (arr || aba);
         }
 
-        // Choza de 5x5 con paredes de tablones, postes, techo escalonado, puerta opcional de 1x2 y una ventana
+        // Choza de 5x5 con paredes de tablones, postes, techo escalonado, entrada opcional de 1x2 sin puerta y una ventana
         // lado: 0 = la puerta mira al este (+x), 1 = mira al oeste (-x)
         private static void Choza(TerrainChunk chunk, int hx, int hz, int suelo, int lado)
         {
@@ -252,10 +252,10 @@ namespace GiganteCode
                 for (int z = 1; z <= 3; z++)
                     Poner(chunk, bx + x, suelo + 6, bz + z, tablones);
 
-            // puerta hacia la plaza y ventana en la pared contraria
+            // entrada (hueco sin puerta) hacia la plaza y ventana en la pared contraria
             int paredPuerta = lado == 0 ? 4 : 0;
             int paredVentana = lado == 0 ? 0 : 4;
-            if (ConPuertas)
+            if (ConEntradas)
             {
                 Poner(chunk, bx + paredPuerta, suelo + 1, bz + 2, 0);
                 Poner(chunk, bx + paredPuerta, suelo + 2, bz + 2, 0);
